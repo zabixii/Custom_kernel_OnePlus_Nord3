@@ -57,6 +57,11 @@ on:
         description: "Enable NetHunter kernel support?"
         required: true
         default: true
+      WIFI_DRIVERS:
+        type: boolean
+        description: "Include external Wi-Fi drivers? (RTL8812AU, ATH9K, etc.)"
+        required: true
+        default: true
 
 jobs:
   notify_start:
@@ -69,7 +74,7 @@ jobs:
 
   build:
     needs: notify_start
-    name: ${{ github.event.inputs.FAST_BUILD == 'true' && '[FAST]' || '' }}${{ github.event.inputs.KSU == 'true' && ' [KSU]' || ' [MAGISK]' }}${{ github.event.inputs.NETHUNTER == 'true' && ' [NH]' || '' }} For ${{ github.event.inputs.FILE }} ${{ github.event.inputs.SUFFIX }}
+    name: ${{ github.event.inputs.FAST_BUILD == 'true' && '[FAST]' || '' }}${{ github.event.inputs.KSU == 'true' && ' [KSU]' || ' [MAGISK]' }}${{ github.event.inputs.NETHUNTER == 'true' && ' [NH]' || '' }}${{ github.event.inputs.WIFI_DRIVERS == 'true' && ' [WIFI]' || '' }} For ${{ github.event.inputs.FILE }} ${{ github.event.inputs.SUFFIX }}
     runs-on: ubuntu-latest
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
@@ -190,6 +195,7 @@ jobs:
           echo "Selected VFS: ${{ github.event.inputs.VFS }}"
           echo "Selected KPM: ${{ github.event.inputs.KPM }}"
           echo "Selected NETHUNTER: ${{ github.event.inputs.NETHUNTER }}"
+          echo "Selected WIFI_DRIVERS: ${{ github.event.inputs.WIFI_DRIVERS }}"
           echo "Custom KSU_META: ${{ github.event.inputs.KSU_META }}"
           echo "=============================================="
           if [ "${{ github.event.inputs.KSU }}" = "true" ]; then
@@ -976,8 +982,243 @@ jobs:
           echo "   ✗ CONFIG_USER_NS"
           echo "   ✗ CONFIG_DEVTMPFS_MOUNT"
           echo "   ✗ CONFIG_DEVPTS_MULTIPLE_INSTANCES"
-          echo "   ✗ External Wi-Fi drivers"
           echo "   ✗ Onboard Wi-Fi injection"
+
+      # ==========================================
+      # EXTERNAL WIFI DRIVERS (Optional)
+      # ==========================================
+      - name: Clone External Wi-Fi Drivers
+        if: ${{ github.event.inputs.NETHUNTER == 'true' && github.event.inputs.WIFI_DRIVERS == 'true' }}
+        run: |
+          cd kernel_workspace
+          
+          echo "=============================================="
+          echo "  Cloning External Wi-Fi Drivers"
+          echo "=============================================="
+          
+          mkdir -p wifi_drivers && cd wifi_drivers
+          
+          # RTL8812AU - Most popular for NetHunter (aircrack-ng version)
+          echo "📡 Cloning RTL8812AU (aircrack-ng)..."
+          git clone --depth=1 https://github.com/aircrack-ng/rtl8812au.git
+          
+          # RTL8814AU
+          echo "📡 Cloning RTL8814AU..."
+          git clone --depth=1 https://github.com/aircrack-ng/rtl8814au.git
+          
+          # RTL8188EUS
+          echo "📡 Cloning RTL8188EUS..."
+          git clone --depth=1 https://github.com/aircrack-ng/rtl8188eus.git
+          
+          # RTL88x2BU
+          echo "📡 Cloning RTL88x2BU..."
+          git clone --depth=1 https://github.com/cilynx/rtl88x2bu.git
+          
+          echo ""
+          echo "✅ All external drivers cloned"
+          ls -la
+
+      - name: Integrate External Wi-Fi Drivers into Kernel
+        if: ${{ github.event.inputs.NETHUNTER == 'true' && github.event.inputs.WIFI_DRIVERS == 'true' }}
+        run: |
+          cd kernel_workspace
+          KERNEL_DIR=$(pwd)/kernel-5.10
+          WIFI_DIR=$(pwd)/wifi_drivers
+          
+          echo "=============================================="
+          echo "  Integrating External Wi-Fi Drivers"
+          echo "=============================================="
+          
+          # Create wireless drivers directory if it doesn't exist
+          mkdir -p $KERNEL_DIR/drivers/net/wireless/realtek
+          
+          # ----------------------------------------
+          # RTL8812AU Integration
+          # ----------------------------------------
+          echo "📡 Integrating RTL8812AU..."
+          cp -r $WIFI_DIR/rtl8812au $KERNEL_DIR/drivers/net/wireless/realtek/rtl8812au
+          
+          # Create Kconfig for RTL8812AU
+          cat > $KERNEL_DIR/drivers/net/wireless/realtek/rtl8812au/Kconfig << 'KCONFIG_EOF'
+          config RTL8812AU
+          	tristate "Realtek RTL8812AU/RTL8821AU USB WiFi"
+          	depends on USB && CFG80211 && MAC80211
+          	default m
+          	help
+          	  This option enables support for RTL8812AU/RTL8821AU USB WiFi adapters.
+          	  Popular for monitor mode and packet injection.
+          KCONFIG_EOF
+          
+          # ----------------------------------------
+          # RTL8814AU Integration
+          # ----------------------------------------
+          echo "📡 Integrating RTL8814AU..."
+          cp -r $WIFI_DIR/rtl8814au $KERNEL_DIR/drivers/net/wireless/realtek/rtl8814au
+          
+          cat > $KERNEL_DIR/drivers/net/wireless/realtek/rtl8814au/Kconfig << 'KCONFIG_EOF'
+          config RTL8814AU
+          	tristate "Realtek RTL8814AU USB WiFi"
+          	depends on USB && CFG80211 && MAC80211
+          	default m
+          	help
+          	  This option enables support for RTL8814AU USB WiFi adapters.
+          KCONFIG_EOF
+          
+          # ----------------------------------------
+          # RTL8188EUS Integration
+          # ----------------------------------------
+          echo "📡 Integrating RTL8188EUS..."
+          cp -r $WIFI_DIR/rtl8188eus $KERNEL_DIR/drivers/net/wireless/realtek/rtl8188eus
+          
+          cat > $KERNEL_DIR/drivers/net/wireless/realtek/rtl8188eus/Kconfig << 'KCONFIG_EOF'
+          config RTL8188EUS
+          	tristate "Realtek RTL8188EUS USB WiFi"
+          	depends on USB && CFG80211 && MAC80211
+          	default m
+          	help
+          	  This option enables support for RTL8188EUS USB WiFi adapters.
+          KCONFIG_EOF
+          
+          # ----------------------------------------
+          # RTL88x2BU Integration
+          # ----------------------------------------
+          echo "📡 Integrating RTL88x2BU..."
+          cp -r $WIFI_DIR/rtl88x2bu $KERNEL_DIR/drivers/net/wireless/realtek/rtl88x2bu
+          
+          cat > $KERNEL_DIR/drivers/net/wireless/realtek/rtl88x2bu/Kconfig << 'KCONFIG_EOF'
+          config RTL88X2BU
+          	tristate "Realtek RTL88x2BU USB WiFi"
+          	depends on USB && CFG80211 && MAC80211
+          	default m
+          	help
+          	  This option enables support for RTL88x2BU USB WiFi adapters.
+          KCONFIG_EOF
+          
+          # ----------------------------------------
+          # Update Realtek Kconfig to include new drivers
+          # ----------------------------------------
+          echo "📝 Updating Realtek Kconfig..."
+          
+          # Check if realtek Kconfig exists, if not create it
+          if [ ! -f $KERNEL_DIR/drivers/net/wireless/realtek/Kconfig ]; then
+            cat > $KERNEL_DIR/drivers/net/wireless/realtek/Kconfig << 'KCONFIG_EOF'
+          # SPDX-License-Identifier: GPL-2.0-only
+          config WLAN_VENDOR_REALTEK
+          	bool "Realtek devices"
+          	default y
+          	help
+          	  If you have a wireless card belonging to this class, say Y.
+          KCONFIG_EOF
+          fi
+          
+          # Append our drivers to Kconfig
+          cat >> $KERNEL_DIR/drivers/net/wireless/realtek/Kconfig << 'KCONFIG_EOF'
+
+          if WLAN_VENDOR_REALTEK
+
+          source "drivers/net/wireless/realtek/rtl8812au/Kconfig"
+          source "drivers/net/wireless/realtek/rtl8814au/Kconfig"
+          source "drivers/net/wireless/realtek/rtl8188eus/Kconfig"
+          source "drivers/net/wireless/realtek/rtl88x2bu/Kconfig"
+
+          endif # WLAN_VENDOR_REALTEK
+          KCONFIG_EOF
+          
+          # ----------------------------------------
+          # Update Realtek Makefile
+          # ----------------------------------------
+          echo "📝 Updating Realtek Makefile..."
+          
+          if [ ! -f $KERNEL_DIR/drivers/net/wireless/realtek/Makefile ]; then
+            touch $KERNEL_DIR/drivers/net/wireless/realtek/Makefile
+          fi
+          
+          cat >> $KERNEL_DIR/drivers/net/wireless/realtek/Makefile << 'MAKEFILE_EOF'
+
+          # NetHunter External Wi-Fi Drivers
+          obj-$(CONFIG_RTL8812AU)		+= rtl8812au/
+          obj-$(CONFIG_RTL8814AU)		+= rtl8814au/
+          obj-$(CONFIG_RTL8188EUS)	+= rtl8188eus/
+          obj-$(CONFIG_RTL88X2BU)		+= rtl88x2bu/
+          MAKEFILE_EOF
+          
+          echo ""
+          echo "✅ External Wi-Fi drivers integrated"
+
+      - name: Add External Wi-Fi Driver Configs
+        if: ${{ github.event.inputs.NETHUNTER == 'true' && github.event.inputs.WIFI_DRIVERS == 'true' }}
+        run: |
+          cd kernel_workspace/kernel-5.10
+          CONFIG_FILE=./arch/arm64/configs/gki_defconfig
+          
+          echo "=============================================="
+          echo "  Adding External Wi-Fi Driver Configs"
+          echo "=============================================="
+          
+          cat >> "$CONFIG_FILE" << 'EOF'
+
+          # ==========================================
+          # EXTERNAL WIFI DRIVERS (NetHunter)
+          # ==========================================
+
+          # Realtek Drivers
+          CONFIG_WLAN_VENDOR_REALTEK=y
+          CONFIG_RTL8812AU=y
+          CONFIG_RTL8814AU=y
+          CONFIG_RTL8188EUS=y
+          CONFIG_RTL88X2BU=y
+
+          # Mainline Drivers (already in kernel)
+          CONFIG_ATH9K=y
+          CONFIG_ATH9K_HTC=y
+          CONFIG_ATH9K_COMMON=y
+          CONFIG_ATH9K_HW=y
+          CONFIG_ATH_COMMON=y
+          CONFIG_RT2X00=y
+          CONFIG_RT2800USB=y
+          CONFIG_RT2800USB_RT3573=y
+          CONFIG_RT2800USB_RT53XX=y
+          CONFIG_RT2800USB_RT55XX=y
+          CONFIG_RT2800USB_UNKNOWN=y
+          CONFIG_RT2800_LIB=y
+          CONFIG_RT2X00_LIB_USB=y
+          CONFIG_RT2X00_LIB=y
+          CONFIG_MT7601U=y
+          CONFIG_MT76_USB=y
+          CONFIG_MT76x0U=y
+          CONFIG_MT76x2U=y
+          CONFIG_RTL8XXXU=y
+          CONFIG_RTL8XXXU_UNTESTED=y
+          CONFIG_RTLWIFI=y
+          CONFIG_RTLWIFI_USB=y
+          CONFIG_RTL8192CU=y
+          CONFIG_ZYDAS_ZD1211RW=y
+          CONFIG_USB_NET_RNDIS_WLAN=y
+
+          # Driver Dependencies
+          CONFIG_FW_LOADER=y
+          CONFIG_FW_LOADER_USER_HELPER=y
+          CONFIG_FW_LOADER_USER_HELPER_FALLBACK=y
+          CONFIG_WANT_DEV_COREDUMP=y
+          CONFIG_DEV_COREDUMP=y
+
+          # ==========================================
+          # END EXTERNAL WIFI DRIVERS
+          # ==========================================
+          EOF
+          
+          echo ""
+          echo "✅ Added External Wi-Fi Driver configs:"
+          echo "   ✓ RTL8812AU (Alfa AWUS036ACH, etc.)"
+          echo "   ✓ RTL8814AU (Alfa AWUS1900)"
+          echo "   ✓ RTL8188EUS (cheap USB adapters)"
+          echo "   ✓ RTL88x2BU (AC1200 adapters)"
+          echo "   ✓ ATH9K_HTC (Atheros AR9271)"
+          echo "   ✓ RT2800USB (Ralink RT3070/5370)"
+          echo "   ✓ MT7601U (MediaTek)"
+          echo "   ✓ MT76x0U/MT76x2U (MediaTek AC)"
+          echo "   ✓ RTL8192CU (older Realtek)"
+          echo "   ✓ ZD1211RW (Zydas)"
 
       - name: Custom BUILD_TIME
         if: ${{ github.event.inputs.BUILD_TIME != '' && !contains('Ff', github.event.inputs.BUILD_TIME) }}
@@ -1077,6 +1318,9 @@ jobs:
           NH_SUFFIX=""
           if [ "${{ github.event.inputs.NETHUNTER }}" = "true" ]; then
             NH_SUFFIX="_NH"
+            if [ "${{ github.event.inputs.WIFI_DRIVERS }}" = "true" ]; then
+              NH_SUFFIX="${NH_SUFFIX}_WIFI"
+            fi
           fi
           echo "value=${KSU_SUFFIX}${NH_SUFFIX}" >> $GITHUB_OUTPUT
 
