@@ -512,10 +512,7 @@ jobs:
           echo "  Adding Zabixii⚡ Kernel Configuration"
           echo "=============================================="
           
-          # ==========================================
-          # SUKISU ULTRA / SUSFS CONFIGURATION
-          # ==========================================
-          echo "# SukiSU Ultra Configuration" >> "$CONFIG_FILE"
+          # SukiSU Ultra / SUSFS Configuration
           echo "CONFIG_KSU=y" >> "$CONFIG_FILE"
           if [ "${{ github.event.inputs.KPM }}" = "true" ]; then
             echo "CONFIG_KPM=y" >> "$CONFIG_FILE"
@@ -544,30 +541,9 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> "$CONFIG_FILE"
           
-          # ==========================================
-          # FILESYSTEM SUPPORT (Required for chroot/NetHunter)
-          # ==========================================
-          echo "" >> "$CONFIG_FILE"
-          echo "# Filesystem Support" >> "$CONFIG_FILE"
+          # Filesystem & Network (already in original)
           echo "CONFIG_TMPFS_XATTR=y" >> "$CONFIG_FILE"
           echo "CONFIG_TMPFS_POSIX_ACL=y" >> "$CONFIG_FILE"
-          echo "CONFIG_OVERLAY_FS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_FUSE_FS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_EXT4_FS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_EXT4_FS_POSIX_ACL=y" >> "$CONFIG_FILE"
-          echo "CONFIG_EXT4_FS_SECURITY=y" >> "$CONFIG_FILE"
-          echo "CONFIG_SQUASHFS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_SQUASHFS_XZ=y" >> "$CONFIG_FILE"
-          echo "CONFIG_SQUASHFS_LZO=y" >> "$CONFIG_FILE"
-          echo "CONFIG_SQUASHFS_ZSTD=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CIFS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NFS_FS=y" >> "$CONFIG_FILE"
-          
-          # ==========================================
-          # NETWORK / TCP PERFORMANCE
-          # ==========================================
-          echo "" >> "$CONFIG_FILE"
-          echo "# Network Performance" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_BBR=y" >> "$CONFIG_FILE"
           echo "CONFIG_NET_SCH_FQ=y" >> "$CONFIG_FILE"
@@ -581,7 +557,10 @@ jobs:
           
           sed -i 's/check_defconfig//' ./build.config.gki
 
-      - name: Add NetHunter Kernel Configuration
+      # ==========================================
+      # NETHUNTER: CHECK EXISTING CONFIGS FIRST
+      # ==========================================
+      - name: Check Existing Configs in Defconfig
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10
@@ -589,125 +568,26 @@ jobs:
           
           echo ""
           echo "=============================================="
-          echo "  Adding NetHunter Kernel Configuration"
-          echo "  Zabixii⚡ NetHunter-Capable Kernel"
-          echo "  ⚠️  SAFE VERSION - Bootloop-tested configs removed"
+          echo "  Checking Existing Defconfig for Conflicts"
           echo "=============================================="
           echo ""
           
-          # ==========================================
-          # 1. USB GADGET / HID SUPPORT (BadUSB/DuckHunter)
-          # These are SAFE - standard Android gadget configs
-          # ==========================================
-          echo "" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: USB Gadget & HID Support" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_F_HID=y" >> "$CONFIG_FILE"
-          # Note: USB_GADGET, USB_CONFIGFS, USB_LIBCOMPOSITE are likely already enabled
-          # Only add if missing - don't override vendor config
-          
-          # ==========================================
-          # 2. USB OTG - Only add what's likely missing
-          # ==========================================
-          echo "" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: USB OTG additions" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_SERIAL=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_SERIAL_GENERIC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_SERIAL_CH341=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_SERIAL_CP210X=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_SERIAL_FTDI_SIO=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_SERIAL_PL2303=y" >> "$CONFIG_FILE"
-          
-          # ==========================================
-          # 3. WIRELESS FRAMEWORK - Usually already enabled
-          # Only add WEXT compatibility
-          # ==========================================
-          echo "" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: Wireless Extensions (for external adapters)" >> "$CONFIG_FILE"
-          echo "CONFIG_WIRELESS_EXT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_WEXT_CORE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_WEXT_PROC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_WEXT_PRIV=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CFG80211_WEXT=y" >> "$CONFIG_FILE"
-          
-          # ==========================================
-          # 4. NETFILTER - Add only commonly missing ones
-          # Core netfilter is always enabled on Android
-          # ==========================================
-          echo "" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: Additional Netfilter modules" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_TARGET_TEE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_U32=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_STRING=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_HASHLIMIT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_TARGET_TTL=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NFT_COMPAT=y" >> "$CONFIG_FILE"
-          
-          # ==========================================
-          # 5. NAMESPACES - BE CAREFUL HERE
-          # ⚠️ USER_NS can cause bootloops on some devices!
-          # Only enable the safe ones
-          # ==========================================
-          echo "" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: Namespace support (safe subset)" >> "$CONFIG_FILE"
-          # NOT adding CONFIG_USER_NS - known to cause bootloops!
-          echo "CONFIG_PID_NS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NET_NS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"
-          
-          # ==========================================
-          # 6. INPUT / UINPUT - Usually safe
-          # ==========================================
-          echo "" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: Input support" >> "$CONFIG_FILE"
-          echo "CONFIG_INPUT_UINPUT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_UHID=y" >> "$CONFIG_FILE"
-          echo "CONFIG_HIDRAW=y" >> "$CONFIG_FILE"
-          
-          # ==========================================
-          # 7. NETWORKING - Safe additions
-          # ==========================================
-          echo "" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: Networking" >> "$CONFIG_FILE"
-          echo "CONFIG_TUN=y" >> "$CONFIG_FILE"
-          echo "CONFIG_VETH=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MACVLAN=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BRIDGE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_VLAN_8021Q=y" >> "$CONFIG_FILE"
-          
-          # ==========================================
-          # 8. PPP - Usually needed for VPN
-          # ==========================================
-          echo "" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: PPP/VPN" >> "$CONFIG_FILE"
-          echo "CONFIG_PPP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPP_DEFLATE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPP_MPPE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPTP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPPOE=y" >> "$CONFIG_FILE"
-          
-          # ==========================================
-          # ⚠️ REMOVED DANGEROUS CONFIGS:
-          # - CONFIG_USER_NS (causes bootloop on Android)
-          # - CONFIG_DEVTMPFS_MOUNT (conflicts with Android init)
-          # - CONFIG_DEVPTS_MULTIPLE_INSTANCES (deprecated, causes issues)
-          # - CONFIG_AUDIT/CONFIG_AUDITSYSCALL (can conflict)
-          # - Full Bluetooth stack (vendor-specific on MTK)
-          # - CONFIG_IKCONFIG_PROC (nice to have but not critical)
-          # ==========================================
+          echo "Searching for NetHunter-related configs already in defconfig:"
+          grep -E "CONFIG_USB_CONFIGFS_F_HID|CONFIG_TUN|CONFIG_INPUT_UINPUT" "$CONFIG_FILE" || echo "None found (safe to add)"
           
           echo ""
-          echo "=============================================="
-          echo "  NetHunter SAFE Configuration Complete!"
-          echo "  Removed bootloop-prone configs"
-          echo "=============================================="
+          echo "Checking USB Gadget framework:"
+          grep -E "CONFIG_USB_GADGET|CONFIG_USB_CONFIGFS" "$CONFIG_FILE" || echo "USB Gadget: not found"
+          
           echo ""
+          echo "Full defconfig preview (last 20 lines):"
+          tail -n 20 "$CONFIG_FILE"
 
-      - name: Verify NetHunter Kernel Configuration
+      # ==========================================
+      # NETHUNTER: ULTRA-MINIMAL SAFE CONFIG
+      # Only 3 configs that are 100% safe
+      # ==========================================
+      - name: Add NetHunter Kernel Configuration (Ultra-Minimal)
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10
@@ -715,57 +595,32 @@ jobs:
           
           echo ""
           echo "=============================================="
-          echo "  Zabixii⚡ NetHunter SAFE Config Verification"
+          echo "  Zabixii⚡ ULTRA-MINIMAL NetHunter Config"
+          echo "  Only 3 safe configs to test boot first"
           echo "=============================================="
           echo ""
           
-          # Only check configs we actually added (SAFE set)
-          NETHUNTER_CONFIGS=(
-            "CONFIG_USB_CONFIGFS_F_HID"
-            "CONFIG_USB_F_HID"
-            "CONFIG_USB_SERIAL"
-            "CONFIG_USB_SERIAL_CH341"
-            "CONFIG_WIRELESS_EXT"
-            "CONFIG_CFG80211_WEXT"
-            "CONFIG_NETFILTER_XT_TARGET_TEE"
-            "CONFIG_NETFILTER_XT_TARGET_TPROXY"
-            "CONFIG_PID_NS"
-            "CONFIG_NET_NS"
-            "CONFIG_INPUT_UINPUT"
-            "CONFIG_UHID"
-            "CONFIG_TUN"
-            "CONFIG_BRIDGE"
-            "CONFIG_VETH"
-            "CONFIG_PPP"
-          )
+          # Remove any existing NetHunter section first
+          sed -i '/# NETHUNTER:/,/CONFIG_INPUT_UINPUT/d' "$CONFIG_FILE"
           
-          echo "📋 Checking SAFE NetHunter configs..."
-          echo ""
+          echo "" >> "$CONFIG_FILE"
+          echo "# NETHUNTER: Ultra-Minimal (3 configs only)" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
+          echo "CONFIG_TUN=y" >> "$CONFIG_FILE"
+          echo "CONFIG_INPUT_UINPUT=y" >> "$CONFIG_FILE"
           
-          ADDED=0
-          MISSING=0
-          
-          for cfg in "${NETHUNTER_CONFIGS[@]}"; do
-            if grep -q "^${cfg}=y" "$CONFIG_FILE" 2>/dev/null; then
-              echo "✅ $cfg"
-              ADDED=$((ADDED + 1))
-            elif grep -q "^${cfg}=" "$CONFIG_FILE" 2>/dev/null; then
-              echo "⚠️  $cfg (set but not =y)"
-              ADDED=$((ADDED + 1))
-            else
-              echo "❌ $cfg (not in defconfig - may be inherited)"
-              MISSING=$((MISSING + 1))
-            fi
-          done
-          
-          echo ""
-          echo "=============================================="
-          echo "  Summary: $ADDED explicitly added, $MISSING not found"
-          echo "  Note: Some configs may already exist in base defconfig"
-          echo "=============================================="
-          echo ""
-          
-          echo "NETHUNTER_CONFIGS_COUNT=$ADDED" >> $GITHUB_ENV
+          echo "Added only 3 configs:"
+          echo "  1. CONFIG_USB_CONFIGFS_F_HID (BadUSB)"
+          echo "  2. CONFIG_TUN (VPN/tunnels)"
+          echo "  3. CONFIG_INPUT_UINPUT (input injection)"
+
+      - name: Verify NetHunter Config
+        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
+        run: |
+          cd kernel_workspace/kernel-5.10
+          CONFIG_FILE=./arch/arm64/configs/gki_defconfig
+          echo "Checking NetHunter configs in defconfig:"
+          grep -E "CONFIG_USB_CONFIGFS_F_HID|CONFIG_TUN|CONFIG_INPUT_UINPUT" "$CONFIG_FILE" || echo "Warning: configs not found"
 
       - name: Custom BUILD_TIME
         if: ${{ github.event.inputs.BUILD_TIME != '' && !contains('Ff', github.event.inputs.BUILD_TIME) }}
@@ -790,6 +645,36 @@ jobs:
         run: |
           sed -i '/goto show_pad;/d' kernel_workspace/kernel-5.10/fs/proc/task_mmu.c
 
+      - name: Pre-Build Config Check
+        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
+        run: |
+          cd kernel_workspace/kernel-5.10
+          
+          echo ""
+          echo "=============================================="
+          echo "  Checking What Will Actually Be Built"
+          echo "=============================================="
+          echo ""
+          
+          # Make a test .config to see what gets enabled
+          make ARCH=arm64 gki_defconfig O=.config_test 2>/dev/null || true
+          
+          if [ -f ".config_test/.config" ]; then
+            echo "Checking NetHunter configs in generated .config:"
+            grep "CONFIG_USB_CONFIGFS_F_HID" .config_test/.config || echo "❌ CONFIG_USB_CONFIGFS_F_HID not set"
+            grep "CONFIG_TUN" .config_test/.config || echo "❌ CONFIG_TUN not set"  
+            grep "CONFIG_INPUT_UINPUT" .config_test/.config || echo "❌ CONFIG_INPUT_UINPUT not set"
+            
+            echo ""
+            echo "Checking dependencies:"
+            grep "CONFIG_USB_GADGET" .config_test/.config || echo "⚠️  CONFIG_USB_GADGET not set"
+            grep "CONFIG_USB_CONFIGFS" .config_test/.config || echo "⚠️  CONFIG_USB_CONFIGFS not set"
+            
+            rm -rf .config_test
+          else
+            echo "Could not generate test config, skipping verification"
+          fi
+
       - name: Build Kernel FAST
         if: ${{ github.event.inputs.FAST_BUILD == 'true' }}
         id: fast_build
@@ -802,20 +687,55 @@ jobs:
           ./build/build.sh
           ccache -s
 
+      - name: Verify Kernel Build Output
+        run: |
+          echo "=============================================="
+          echo "  Verifying Kernel Build Output"
+          echo "=============================================="
+          
+          KERNEL_IMAGE="kernel_workspace/out/android12-5.10/kernel-5.10/arch/arm64/boot/Image.gz"
+          
+          if [ ! -f "$KERNEL_IMAGE" ]; then
+            echo "❌ ERROR: Image.gz not found!"
+            echo "Checking what exists in boot directory:"
+            ls -la kernel_workspace/out/android12-5.10/kernel-5.10/arch/arm64/boot/ || echo "Boot directory doesn't exist!"
+            echo ""
+            echo "Checking out directory structure:"
+            find kernel_workspace/out -name "Image*" 2>/dev/null || echo "No Image files found"
+            exit 1
+          fi
+          
+          SIZE=$(stat -c%s "$KERNEL_IMAGE")
+          echo "✅ Image.gz found!"
+          echo "   Path: $KERNEL_IMAGE"
+          echo "   Size: $SIZE bytes ($(($SIZE / 1024 / 1024)) MB)"
+          
+          if [ "$SIZE" -lt 1000000 ]; then
+            echo "❌ WARNING: Image.gz is too small (<1MB)! Build may have failed."
+            exit 1
+          fi
+          
+          echo ""
+          echo "Kernel image verification passed!"
+
       - name: Make AnyKernel3_Zabixii
         run: |
           git clone https://github.com/darklord4567/Anykernel3_AOSP_NORD3.git --depth=1 Anykernel3_Zabixii
           cp kernel_workspace/out/android12-5.10/kernel-5.10/arch/arm64/boot/Image.gz Anykernel3_Zabixii/Image.gz
           
-          # Include simple boot test info
-          if [ "${{ github.event.inputs.NETHUNTER }}" = "true" ]; then
-            echo "NetHunter SAFE config applied"
-          fi
+          echo ""
+          echo "=============================================="
+          echo "  AnyKernel3 Package Contents"
+          echo "=============================================="
+          ls -la Anykernel3_Zabixii/
+          echo ""
+          echo "Image.gz size in package:"
+          ls -la Anykernel3_Zabixii/Image.gz
 
       - name: Set zip Suffix
         id: suffix
         run: |
-          echo "value=${{ github.event.inputs.VFS == 'true' && '_VFS' || '' }}${{ github.event.inputs.KPM == 'true' && '_KPM' || '' }}${{ github.event.inputs.NETHUNTER == 'true' && '_NH' || '' }}${{ github.event.inputs.SCHED == 'true' && '_SCHED' || '' }}" >> $GITHUB_OUTPUT
+          echo "value=${{ github.event.inputs.VFS == 'true' && '_VFS' || '' }}${{ github.event.inputs.KPM == 'true' && '_KPM' || '' }}${{ github.event.inputs.NETHUNTER == 'true' && '_NH' || '' }}" >> $GITHUB_OUTPUT
 
       - name: Upload AnyKernel3_Zabixii
         uses: actions/upload-artifact@v4
@@ -825,30 +745,3 @@ jobs:
 
       - name: Post-build Disk Check
         run: df -h
-
-      - name: Post-Build NetHunter Verification
-        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
-        run: |
-          echo ""
-          echo "=============================================="
-          echo "  Zabixii⚡ NetHunter Build Complete"
-          echo "=============================================="
-          echo ""
-          echo "SAFE NetHunter configs were added."
-          echo ""
-          echo "After flashing, test with:"
-          echo "  cat /proc/version"
-          echo ""
-          echo "If device boots successfully, NetHunter features available:"
-          echo "  ✅ USB HID (BadUSB/DuckHunter)"
-          echo "  ✅ USB Serial adapters"
-          echo "  ✅ External Wi-Fi framework (needs drivers)"
-          echo "  ✅ Network tools (TUN/TAP, bridge, VLAN)"
-          echo "  ✅ PPP/VPN support"
-          echo "  ✅ Chroot support (PID/NET namespaces)"
-          echo ""
-          echo "NOT included (bootloop risk):"
-          echo "  ❌ CONFIG_USER_NS"
-          echo "  ❌ CONFIG_DEVTMPFS_MOUNT"
-          echo "  ❌ Full Bluetooth stack"
-          echo "=============================================="
