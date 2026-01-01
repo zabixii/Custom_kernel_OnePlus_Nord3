@@ -591,396 +591,189 @@ jobs:
           echo "=============================================="
           echo "  Adding NetHunter Kernel Configuration"
           echo "  Zabixii⚡ NetHunter-Capable Kernel"
+          echo "  ⚠️  SAFE VERSION - Bootloop-tested configs removed"
           echo "=============================================="
           echo ""
           
           # ==========================================
           # 1. USB GADGET / HID SUPPORT (BadUSB/DuckHunter)
+          # These are SAFE - standard Android gadget configs
           # ==========================================
           echo "" >> "$CONFIG_FILE"
           echo "# ===========================================" >> "$CONFIG_FILE"
           echo "# NETHUNTER: USB Gadget & HID Support" >> "$CONFIG_FILE"
-          echo "# Required for: BadUSB, DuckHunter, HID attacks" >> "$CONFIG_FILE"
           echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_GADGET=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_GADGET_VBUS_DRAW=500" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS=y" >> "$CONFIG_FILE"
           echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS_F_UVC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS_UEVENT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS_SERIAL=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS_ACM=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS_RNDIS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS_EEM=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS_ECM=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS_NCM=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS_MASS_STORAGE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS_F_FS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS_F_ACC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS_F_AUDIO_SRC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS_F_MIDI=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_G_HID=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_LIBCOMPOSITE=y" >> "$CONFIG_FILE"
           echo "CONFIG_USB_F_HID=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_U_SERIAL=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_U_ETHER=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_F_SERIAL=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_F_ACM=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_F_RNDIS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_F_EEM=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_F_ECM=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_F_NCM=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_F_MASS_STORAGE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_F_FS=y" >> "$CONFIG_FILE"
+          # Note: USB_GADGET, USB_CONFIGFS, USB_LIBCOMPOSITE are likely already enabled
+          # Only add if missing - don't override vendor config
           
           # ==========================================
-          # 2. USB OTG / HOST SUPPORT (External Adapters)
+          # 2. USB OTG - Only add what's likely missing
           # ==========================================
           echo "" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: USB OTG & Host Controller Support" >> "$CONFIG_FILE"
-          echo "# Required for: External Wi-Fi adapters, USB devices" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "CONFIG_USB=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_OTG=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_OTG_WAKELOCK=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_XHCI_HCD=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_EHCI_HCD=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_OHCI_HCD=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_ACM=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_STORAGE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_STORAGE_REALTEK=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_UAS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_ANNOUNCE_NEW_DEVICES=y" >> "$CONFIG_FILE"
+          echo "# NETHUNTER: USB OTG additions" >> "$CONFIG_FILE"
           echo "CONFIG_USB_SERIAL=y" >> "$CONFIG_FILE"
           echo "CONFIG_USB_SERIAL_GENERIC=y" >> "$CONFIG_FILE"
           echo "CONFIG_USB_SERIAL_CH341=y" >> "$CONFIG_FILE"
           echo "CONFIG_USB_SERIAL_CP210X=y" >> "$CONFIG_FILE"
           echo "CONFIG_USB_SERIAL_FTDI_SIO=y" >> "$CONFIG_FILE"
           echo "CONFIG_USB_SERIAL_PL2303=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_SERIAL_OPTION=y" >> "$CONFIG_FILE"
           
           # ==========================================
-          # 3. WIRELESS FRAMEWORK (cfg80211/mac80211)
-          # Note: Framework only, no external drivers
+          # 3. WIRELESS FRAMEWORK - Usually already enabled
+          # Only add WEXT compatibility
           # ==========================================
           echo "" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: Wireless Framework (cfg80211/mac80211)" >> "$CONFIG_FILE"
-          echo "# Framework for external USB Wi-Fi adapters" >> "$CONFIG_FILE"
-          echo "# Drivers NOT included - use modules or Magisk" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "CONFIG_WIRELESS=y" >> "$CONFIG_FILE"
+          echo "# NETHUNTER: Wireless Extensions (for external adapters)" >> "$CONFIG_FILE"
           echo "CONFIG_WIRELESS_EXT=y" >> "$CONFIG_FILE"
           echo "CONFIG_WEXT_CORE=y" >> "$CONFIG_FILE"
           echo "CONFIG_WEXT_PROC=y" >> "$CONFIG_FILE"
           echo "CONFIG_WEXT_PRIV=y" >> "$CONFIG_FILE"
-          echo "CONFIG_WEXT_SPY=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CFG80211=y" >> "$CONFIG_FILE"
           echo "CONFIG_CFG80211_WEXT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CFG80211_WEXT_EXPORT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CFG80211_DEFAULT_PS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CFG80211_CRDA_SUPPORT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MAC80211=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MAC80211_MESH=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MAC80211_LEDS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MAC80211_RC_MINSTREL=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MAC80211_RC_DEFAULT_MINSTREL=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RFKILL=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RFKILL_INPUT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RFKILL_GPIO=y" >> "$CONFIG_FILE"
           
           # ==========================================
-          # 4. NETFILTER / IPTABLES (Full Stack)
+          # 4. NETFILTER - Add only commonly missing ones
+          # Core netfilter is always enabled on Android
           # ==========================================
           echo "" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: Netfilter / iptables Full Stack" >> "$CONFIG_FILE"
-          echo "# Required for: MITM, packet manipulation, NAT" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_ADVANCED=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BRIDGE_NETFILTER=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_CONNTRACK=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_CONNTRACK_MARK=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_CONNTRACK_SECMARK=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_CONNTRACK_ZONES=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_CONNTRACK_EVENTS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_CONNTRACK_TIMEOUT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_CONNTRACK_TIMESTAMP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_CONNTRACK_FTP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_CONNTRACK_IRC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_CONNTRACK_TFTP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_CT_PROTO_DCCP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_CT_PROTO_SCTP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_CT_PROTO_UDPLITE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_NAT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_NAT_REDIRECT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_NAT_MASQUERADE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_TABLES=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_TABLES_INET=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NF_TABLES_NETDEV=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NFT_CT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NFT_LOG=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NFT_LIMIT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NFT_NAT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NFT_MASQ=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NFT_REDIR=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NFT_REJECT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NFT_COMPAT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_IPTABLES=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_FILTER=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_TARGET_REJECT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_TARGET_LOG=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_NAT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_TARGET_MASQUERADE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_TARGET_NETMAP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_TARGET_REDIRECT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_MANGLE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_TARGET_TTL=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_RAW=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_ARPTABLES=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_ARPFILTER=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_ARP_MANGLE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP6_NF_IPTABLES=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP6_NF_FILTER=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP6_NF_TARGET_REJECT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP6_NF_NAT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP6_NF_TARGET_MASQUERADE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP6_NF_MANGLE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP6_NF_RAW=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_TARGET_REDIRECT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_TARGET_LOG=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_TARGET_MARK=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_TARGET_NFLOG=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_TARGET_NFQUEUE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_TARGET_NOTRACK=y" >> "$CONFIG_FILE"
+          echo "# NETHUNTER: Additional Netfilter modules" >> "$CONFIG_FILE"
           echo "CONFIG_NETFILTER_XT_TARGET_TEE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_TARGET_TCPMSS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_COMMENT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_CONNLIMIT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_CONNMARK=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_HASHLIMIT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_HELPER=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_IPRANGE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_IPVS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_LENGTH=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_LIMIT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_MAC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_MARK=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_MULTIPORT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_OWNER=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_PKTTYPE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_POLICY=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_QUOTA=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_RATEEST=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_REALM=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_RECENT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_SOCKET=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_STATE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_STATISTIC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_STRING=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_TCPMSS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_TIME=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" >> "$CONFIG_FILE"
           echo "CONFIG_NETFILTER_XT_MATCH_U32=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_STRING=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_HASHLIMIT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_IP_NF_TARGET_TTL=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NFT_COMPAT=y" >> "$CONFIG_FILE"
           
           # ==========================================
-          # 5. NAMESPACE / CONTAINER SUPPORT (Chroot/Kali)
+          # 5. NAMESPACES - BE CAREFUL HERE
+          # ⚠️ USER_NS can cause bootloops on some devices!
+          # Only enable the safe ones
           # ==========================================
           echo "" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: Namespace & Container Support" >> "$CONFIG_FILE"
-          echo "# Required for: Kali chroot, containers, isolation" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "CONFIG_NAMESPACES=y" >> "$CONFIG_FILE"
-          echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USER_NS=y" >> "$CONFIG_FILE"
+          echo "# NETHUNTER: Namespace support (safe subset)" >> "$CONFIG_FILE"
+          # NOT adding CONFIG_USER_NS - known to cause bootloops!
           echo "CONFIG_PID_NS=y" >> "$CONFIG_FILE"
           echo "CONFIG_NET_NS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CGROUPS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CGROUP_CPUACCT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CGROUP_DEVICE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CGROUP_FREEZER=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CGROUP_NET_CLASSID=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CGROUP_NET_PRIO=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CGROUP_PERF=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CGROUP_SCHED=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CPUSETS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MEMCG=y" >> "$CONFIG_FILE"
+          echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"
           
           # ==========================================
-          # 6. BLUETOOTH SUPPORT (BT Attacks)
+          # 6. INPUT / UINPUT - Usually safe
           # ==========================================
           echo "" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: Bluetooth Support" >> "$CONFIG_FILE"
-          echo "# Required for: Bluetooth attacks, recon" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "CONFIG_BT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_BREDR=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_LE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_RFCOMM=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_RFCOMM_TTY=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_BNEP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_BNEP_MC_FILTER=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_BNEP_PROTO_FILTER=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_HIDP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_HCIBTUSB=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_HCIUART=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_HCIUART_H4=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_HCIUART_BCSP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_HCIUART_ATH3K=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_HCIUART_3WIRE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_HCIVHCI=y" >> "$CONFIG_FILE"
-          
-          # ==========================================
-          # 7. INPUT / UINPUT (HID Emulation)
-          # ==========================================
-          echo "" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: Input & uinput Support" >> "$CONFIG_FILE"
-          echo "# Required for: HID emulation, keyboard injection" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "CONFIG_INPUT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_INPUT_EVDEV=y" >> "$CONFIG_FILE"
+          echo "# NETHUNTER: Input support" >> "$CONFIG_FILE"
           echo "CONFIG_INPUT_UINPUT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_INPUT_KEYBOARD=y" >> "$CONFIG_FILE"
-          echo "CONFIG_INPUT_MOUSE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_INPUT_MISC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_HID=y" >> "$CONFIG_FILE"
-          echo "CONFIG_HID_GENERIC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_HIDRAW=y" >> "$CONFIG_FILE"
           echo "CONFIG_UHID=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_HID=y" >> "$CONFIG_FILE"
-          echo "CONFIG_HID_APPLE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_HID_CHERRY=y" >> "$CONFIG_FILE"
-          echo "CONFIG_HID_LOGITECH=y" >> "$CONFIG_FILE"
-          echo "CONFIG_HID_MICROSOFT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_HIDRAW=y" >> "$CONFIG_FILE"
           
           # ==========================================
-          # 8. FIRMWARE LOADING (External Adapters)
+          # 7. NETWORKING - Safe additions
           # ==========================================
           echo "" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: Firmware Loading Framework" >> "$CONFIG_FILE"
-          echo "# Required for: Loading firmware for USB adapters" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "CONFIG_FW_LOADER=y" >> "$CONFIG_FILE"
-          echo "CONFIG_FW_LOADER_USER_HELPER=y" >> "$CONFIG_FILE"
-          echo "CONFIG_FW_LOADER_USER_HELPER_FALLBACK=y" >> "$CONFIG_FILE"
-          echo 'CONFIG_EXTRA_FIRMWARE=""' >> "$CONFIG_FILE"
-          echo 'CONFIG_EXTRA_FIRMWARE_DIR="/lib/firmware"' >> "$CONFIG_FILE"
-          
-          # ==========================================
-          # 9. NETWORKING - PACKET / RAW SOCKETS
-          # ==========================================
-          echo "" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: Packet & Raw Socket Support" >> "$CONFIG_FILE"
-          echo "# Required for: Raw packet capture, injection tools" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "CONFIG_PACKET=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PACKET_DIAG=y" >> "$CONFIG_FILE"
-          echo "CONFIG_UNIX=y" >> "$CONFIG_FILE"
-          echo "CONFIG_UNIX_DIAG=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NET_RAW=y" >> "$CONFIG_FILE"
+          echo "# NETHUNTER: Networking" >> "$CONFIG_FILE"
           echo "CONFIG_TUN=y" >> "$CONFIG_FILE"
-          echo "CONFIG_TAP=y" >> "$CONFIG_FILE"
           echo "CONFIG_VETH=y" >> "$CONFIG_FILE"
           echo "CONFIG_MACVLAN=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MACVTAP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IPVLAN=y" >> "$CONFIG_FILE"
-          echo "CONFIG_VXLAN=y" >> "$CONFIG_FILE"
           echo "CONFIG_BRIDGE=y" >> "$CONFIG_FILE"
           echo "CONFIG_VLAN_8021Q=y" >> "$CONFIG_FILE"
-          echo "CONFIG_LLC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_LLC2=y" >> "$CONFIG_FILE"
           
           # ==========================================
-          # 10. PPP / VPN SUPPORT
+          # 8. PPP - Usually needed for VPN
           # ==========================================
           echo "" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: PPP & VPN Support" >> "$CONFIG_FILE"
-          echo "# Required for: VPN connections, tunneling" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
+          echo "# NETHUNTER: PPP/VPN" >> "$CONFIG_FILE"
           echo "CONFIG_PPP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPP_BSDCOMP=y" >> "$CONFIG_FILE"
           echo "CONFIG_PPP_DEFLATE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPP_FILTER=y" >> "$CONFIG_FILE"
           echo "CONFIG_PPP_MPPE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPP_MULTILINK=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPPOE=y" >> "$CONFIG_FILE"
           echo "CONFIG_PPTP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPPOL2TP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPP_ASYNC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPP_SYNC_TTY=y" >> "$CONFIG_FILE"
-          echo "CONFIG_L2TP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_L2TP_V3=y" >> "$CONFIG_FILE"
-          echo "CONFIG_L2TP_IP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_L2TP_ETH=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PPPOE=y" >> "$CONFIG_FILE"
           
           # ==========================================
-          # 11. CRYPTO SUPPORT (Security Tools)
+          # ⚠️ REMOVED DANGEROUS CONFIGS:
+          # - CONFIG_USER_NS (causes bootloop on Android)
+          # - CONFIG_DEVTMPFS_MOUNT (conflicts with Android init)
+          # - CONFIG_DEVPTS_MULTIPLE_INSTANCES (deprecated, causes issues)
+          # - CONFIG_AUDIT/CONFIG_AUDITSYSCALL (can conflict)
+          # - Full Bluetooth stack (vendor-specific on MTK)
+          # - CONFIG_IKCONFIG_PROC (nice to have but not critical)
           # ==========================================
-          echo "" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: Crypto Support" >> "$CONFIG_FILE"
-          echo "# Required for: Encryption, hashing, security tools" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "CONFIG_CRYPTO=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CRYPTO_USER=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CRYPTO_USER_API=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CRYPTO_USER_API_HASH=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CRYPTO_USER_API_SKCIPHER=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CRYPTO_USER_API_RNG=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CRYPTO_USER_API_AEAD=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CRYPTO_SHA256=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CRYPTO_SHA512=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CRYPTO_AES=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CRYPTO_CBC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CRYPTO_CTR=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CRYPTO_GCM=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CRYPTO_CHACHA20POLY1305=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CRYPTO_ECHAINIV=y" >> "$CONFIG_FILE"
-          
-          # ==========================================
-          # 12. MISC NETHUNTER REQUIREMENTS
-          # ==========================================
-          echo "" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: Miscellaneous Requirements" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "CONFIG_DEVTMPFS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_DEVTMPFS_MOUNT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_DEVPTS_MULTIPLE_INSTANCES=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IKCONFIG=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IKCONFIG_PROC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PROC_FS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_SYSFS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_SECCOMP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_SECCOMP_FILTER=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BINFMT_MISC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_SYSVIPC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_POSIX_MQUEUE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_AUDIT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_AUDITSYSCALL=y" >> "$CONFIG_FILE"
           
           echo ""
           echo "=============================================="
-          echo "  NetHunter Configuration Complete!"
-          echo "  Total configs added for NetHunter support"
+          echo "  NetHunter SAFE Configuration Complete!"
+          echo "  Removed bootloop-prone configs"
+          echo "=============================================="
+          echo ""
+
+      - name: Verify NetHunter Kernel Configuration
+        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
+        run: |
+          cd kernel_workspace/kernel-5.10
+          CONFIG_FILE=./arch/arm64/configs/gki_defconfig
+          
+          echo ""
+          echo "=============================================="
+          echo "  Zabixii⚡ NetHunter SAFE Config Verification"
           echo "=============================================="
           echo ""
           
-          # Count NetHunter configs added
-          echo "Verifying NetHunter configuration..."
-          grep -c "NETHUNTER" "$CONFIG_FILE" || echo "NetHunter comment markers found"
-          echo "Configuration file location: $CONFIG_FILE"
+          # Only check configs we actually added (SAFE set)
+          NETHUNTER_CONFIGS=(
+            # USB HID (what we added)
+            "CONFIG_USB_CONFIGFS_F_HID"
+            "CONFIG_USB_F_HID"
+            # USB Serial
+            "CONFIG_USB_SERIAL"
+            "CONFIG_USB_SERIAL_CH341"
+            # Wireless Extensions
+            "CONFIG_WIRELESS_EXT"
+            "CONFIG_CFG80211_WEXT"
+            # Netfilter additions
+            "CONFIG_NETFILTER_XT_TARGET_TEE"
+            "CONFIG_NETFILTER_XT_TARGET_TPROXY"
+            # Namespaces (safe ones only)
+            "CONFIG_PID_NS"
+            "CONFIG_NET_NS"
+            # Input
+            "CONFIG_INPUT_UINPUT"
+            "CONFIG_UHID"
+            # Networking
+            "CONFIG_TUN"
+            "CONFIG_BRIDGE"
+            "CONFIG_VETH"
+            # PPP
+            "CONFIG_PPP"
+          )
+          
+          echo "📋 Checking SAFE NetHunter configs..."
+          echo ""
+          
+          ADDED=0
+          MISSING=0
+          
+          for cfg in "${NETHUNTER_CONFIGS[@]}"; do
+            if grep -q "^${cfg}=y" "$CONFIG_FILE" 2>/dev/null; then
+              echo "✅ $cfg"
+              ((ADDED++))
+            elif grep -q "^${cfg}=" "$CONFIG_FILE" 2>/dev/null; then
+              echo "⚠️  $cfg (set but not =y)"
+              ((ADDED++))
+            else
+              echo "❌ $cfg (not in defconfig - may be inherited)"
+              ((MISSING++))
+            fi
+          done
+          
+          echo ""
+          echo "=============================================="
+          echo "  Summary: $ADDED explicitly added"
+          echo "  Note: Some configs may already exist in base defconfig"
+          echo "=============================================="
+          echo ""
+          
+          echo "NETHUNTER_CONFIGS_COUNT=$ADDED" >> $GITHUB_ENV
 
       - name: Custom BUILD_TIME
         if: ${{ github.event.inputs.BUILD_TIME != '' && !contains('Ff', github.event.inputs.BUILD_TIME) }}
@@ -1021,6 +814,11 @@ jobs:
         run: |
           git clone https://github.com/darklord4567/Anykernel3_AOSP_NORD3.git --depth=1 Anykernel3_Zabixii
           cp kernel_workspace/out/android12-5.10/kernel-5.10/arch/arm64/boot/Image.gz Anykernel3_Zabixii/Image.gz
+          
+          # Include simple boot test info
+          if [ "${{ github.event.inputs.NETHUNTER }}" = "true" ]; then
+            echo "NetHunter SAFE config applied"
+          fi
 
       - name: Set zip Suffix
         id: suffix
@@ -1035,3 +833,30 @@ jobs:
 
       - name: Post-build Disk Check
         run: df -h
+
+      - name: Post-Build NetHunter Verification
+        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
+        run: |
+          echo ""
+          echo "=============================================="
+          echo "  Zabixii⚡ NetHunter Build Complete"
+          echo "=============================================="
+          echo ""
+          echo "SAFE NetHunter configs were added."
+          echo ""
+          echo "After flashing, test with:"
+          echo "  cat /proc/version"
+          echo ""
+          echo "If device boots successfully, NetHunter features available:"
+          echo "  ✅ USB HID (BadUSB/DuckHunter)"
+          echo "  ✅ USB Serial adapters"
+          echo "  ✅ External Wi-Fi framework (needs drivers)"
+          echo "  ✅ Network tools (TUN/TAP, bridge, VLAN)"
+          echo "  ✅ PPP/VPN support"
+          echo "  ✅ Chroot support (PID/NET namespaces)"
+          echo ""
+          echo "NOT included (bootloop risk):"
+          echo "  ❌ CONFIG_USER_NS"
+          echo "  ❌ CONFIG_DEVTMPFS_MOUNT"
+          echo "  ❌ Full Bluetooth stack"
+          echo "=============================================="
