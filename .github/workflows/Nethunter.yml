@@ -558,69 +558,21 @@ jobs:
           sed -i 's/check_defconfig//' ./build.config.gki
 
       # ==========================================
-      # NETHUNTER: CHECK EXISTING CONFIGS FIRST
+      # NETHUNTER: MINIMAL CONFIG (NO DIAGNOSTICS)
       # ==========================================
-      - name: Check Existing Configs in Defconfig
+      - name: Add NetHunter Kernel Configuration
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10
           CONFIG_FILE=./arch/arm64/configs/gki_defconfig
           
-          echo ""
-          echo "=============================================="
-          echo "  Checking Existing Defconfig for Conflicts"
-          echo "=============================================="
-          echo ""
-          
-          echo "Searching for NetHunter-related configs already in defconfig:"
-          grep -E "CONFIG_USB_CONFIGFS_F_HID|CONFIG_TUN|CONFIG_INPUT_UINPUT" "$CONFIG_FILE" || echo "None found (safe to add)"
-          
-          echo ""
-          echo "Checking USB Gadget framework:"
-          grep -E "CONFIG_USB_GADGET|CONFIG_USB_CONFIGFS" "$CONFIG_FILE" || echo "USB Gadget: not found"
-          
-          echo ""
-          echo "Full defconfig preview (last 20 lines):"
-          tail -n 20 "$CONFIG_FILE"
-
-      # ==========================================
-      # NETHUNTER: ULTRA-MINIMAL SAFE CONFIG
-      # Only 3 configs that are 100% safe
-      # ==========================================
-      - name: Add NetHunter Kernel Configuration (Ultra-Minimal)
-        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
-        run: |
-          cd kernel_workspace/kernel-5.10
-          CONFIG_FILE=./arch/arm64/configs/gki_defconfig
-          
-          echo ""
-          echo "=============================================="
-          echo "  Zabixii⚡ ULTRA-MINIMAL NetHunter Config"
-          echo "  Only 3 safe configs to test boot first"
-          echo "=============================================="
-          echo ""
-          
-          # Remove any existing NetHunter section first
-          sed -i '/# NETHUNTER:/,/CONFIG_INPUT_UINPUT/d' "$CONFIG_FILE"
-          
+          echo "Adding 3 NetHunter configs..."
           echo "" >> "$CONFIG_FILE"
-          echo "# NETHUNTER: Ultra-Minimal (3 configs only)" >> "$CONFIG_FILE"
+          echo "# NETHUNTER" >> "$CONFIG_FILE"
           echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
           echo "CONFIG_TUN=y" >> "$CONFIG_FILE"
           echo "CONFIG_INPUT_UINPUT=y" >> "$CONFIG_FILE"
-          
-          echo "Added only 3 configs:"
-          echo "  1. CONFIG_USB_CONFIGFS_F_HID (BadUSB)"
-          echo "  2. CONFIG_TUN (VPN/tunnels)"
-          echo "  3. CONFIG_INPUT_UINPUT (input injection)"
-
-      - name: Verify NetHunter Config
-        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
-        run: |
-          cd kernel_workspace/kernel-5.10
-          CONFIG_FILE=./arch/arm64/configs/gki_defconfig
-          echo "Checking NetHunter configs in defconfig:"
-          grep -E "CONFIG_USB_CONFIGFS_F_HID|CONFIG_TUN|CONFIG_INPUT_UINPUT" "$CONFIG_FILE" || echo "Warning: configs not found"
+          echo "Done."
 
       - name: Custom BUILD_TIME
         if: ${{ github.event.inputs.BUILD_TIME != '' && !contains('Ff', github.event.inputs.BUILD_TIME) }}
@@ -644,36 +596,6 @@ jobs:
       - name: Fix undeclared show_pad label
         run: |
           sed -i '/goto show_pad;/d' kernel_workspace/kernel-5.10/fs/proc/task_mmu.c
-
-      - name: Pre-Build Config Check
-        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
-        run: |
-          cd kernel_workspace/kernel-5.10
-          
-          echo ""
-          echo "=============================================="
-          echo "  Checking What Will Actually Be Built"
-          echo "=============================================="
-          echo ""
-          
-          # Make a test .config to see what gets enabled
-          make ARCH=arm64 gki_defconfig O=.config_test 2>/dev/null || true
-          
-          if [ -f ".config_test/.config" ]; then
-            echo "Checking NetHunter configs in generated .config:"
-            grep "CONFIG_USB_CONFIGFS_F_HID" .config_test/.config || echo "❌ CONFIG_USB_CONFIGFS_F_HID not set"
-            grep "CONFIG_TUN" .config_test/.config || echo "❌ CONFIG_TUN not set"  
-            grep "CONFIG_INPUT_UINPUT" .config_test/.config || echo "❌ CONFIG_INPUT_UINPUT not set"
-            
-            echo ""
-            echo "Checking dependencies:"
-            grep "CONFIG_USB_GADGET" .config_test/.config || echo "⚠️  CONFIG_USB_GADGET not set"
-            grep "CONFIG_USB_CONFIGFS" .config_test/.config || echo "⚠️  CONFIG_USB_CONFIGFS not set"
-            
-            rm -rf .config_test
-          else
-            echo "Could not generate test config, skipping verification"
-          fi
 
       - name: Build Kernel FAST
         if: ${{ github.event.inputs.FAST_BUILD == 'true' }}
