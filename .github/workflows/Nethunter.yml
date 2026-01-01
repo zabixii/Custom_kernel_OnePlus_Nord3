@@ -721,29 +721,21 @@ jobs:
           
           # Only check configs we actually added (SAFE set)
           NETHUNTER_CONFIGS=(
-            # USB HID (what we added)
             "CONFIG_USB_CONFIGFS_F_HID"
             "CONFIG_USB_F_HID"
-            # USB Serial
             "CONFIG_USB_SERIAL"
             "CONFIG_USB_SERIAL_CH341"
-            # Wireless Extensions
             "CONFIG_WIRELESS_EXT"
             "CONFIG_CFG80211_WEXT"
-            # Netfilter additions
             "CONFIG_NETFILTER_XT_TARGET_TEE"
             "CONFIG_NETFILTER_XT_TARGET_TPROXY"
-            # Namespaces (safe ones only)
             "CONFIG_PID_NS"
             "CONFIG_NET_NS"
-            # Input
             "CONFIG_INPUT_UINPUT"
             "CONFIG_UHID"
-            # Networking
             "CONFIG_TUN"
             "CONFIG_BRIDGE"
             "CONFIG_VETH"
-            # PPP
             "CONFIG_PPP"
           )
           
@@ -756,19 +748,19 @@ jobs:
           for cfg in "${NETHUNTER_CONFIGS[@]}"; do
             if grep -q "^${cfg}=y" "$CONFIG_FILE" 2>/dev/null; then
               echo "✅ $cfg"
-              ((ADDED++))
+              ADDED=$((ADDED + 1))
             elif grep -q "^${cfg}=" "$CONFIG_FILE" 2>/dev/null; then
               echo "⚠️  $cfg (set but not =y)"
-              ((ADDED++))
+              ADDED=$((ADDED + 1))
             else
               echo "❌ $cfg (not in defconfig - may be inherited)"
-              ((MISSING++))
+              MISSING=$((MISSING + 1))
             fi
           done
           
           echo ""
           echo "=============================================="
-          echo "  Summary: $ADDED explicitly added"
+          echo "  Summary: $ADDED explicitly added, $MISSING not found"
           echo "  Note: Some configs may already exist in base defconfig"
           echo "=============================================="
           echo ""
