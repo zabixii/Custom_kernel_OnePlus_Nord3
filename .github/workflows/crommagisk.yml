@@ -1,4 +1,4 @@
-name: Build OnePlus Nord 3 AOSP - Zabixii⚡ (Smart NetHunter)
+name: Build OnePlus Nord 3 AOSP - Zabixii⚡ (NetHunter)
 
 on:
   workflow_dispatch:
@@ -15,14 +15,14 @@ on:
         default: "F"
       SUFFIX:
         type: string
-        description: "Custom kernel suffix (leave empty for a random string)"
+        description: "Custom kernel suffix"
         required: false
-        default: "Zabixii⚡"
+        default: "Zabixii"
       KSU:
         type: boolean
         description: "Enable KernelSU/SukiSU? (false = Magisk only)"
         required: true
-        default: true
+        default: false
       SUSFS_CI:
         type: choice
         description: "SUSFS module download method (only if KSU enabled)"
@@ -36,7 +36,7 @@ on:
         type: string
         description: "Branch name/Custom version identifier (only if KSU enabled)"
         required: false
-        default: "susfs-main/Zabixii⚡"
+        default: "susfs-main/Zabixii"
       FAST_BUILD:
         type: boolean
         description: "Enable fast build?"
@@ -59,13 +59,13 @@ on:
         default: true
       WIFI_DRIVERS:
         type: boolean
-        description: "Include external Wi-Fi drivers? (RTL8812AU, ATH9K, etc.)"
+        description: "Include external Wi-Fi drivers? (RTL8812AU, ATH9K, MT76, etc.)"
         required: true
-        default: false
+        default: true
 
 jobs:
   notify_start:
-    name: Notify Start 🚀
+    name: Notify Start
     runs-on: ubuntu-latest
     steps:
       - name: Get current time (IST)
@@ -74,7 +74,7 @@ jobs:
 
   build:
     needs: notify_start
-    name: ${{ github.event.inputs.FAST_BUILD == 'true' && '[FAST]' || '' }}${{ github.event.inputs.KSU == 'true' && ' [KSU]' || ' [MAGISK]' }}${{ github.event.inputs.NETHUNTER == 'true' && ' [NH]' || '' }}${{ github.event.inputs.WIFI_DRIVERS == 'true' && ' [WIFI]' || '' }} For ${{ github.event.inputs.FILE }} ${{ github.event.inputs.SUFFIX }}
+    name: ${{ github.event.inputs.FAST_BUILD == 'true' && '[FAST]' || '' }}${{ github.event.inputs.KSU == 'true' && ' [KSU]' || ' [MAGISK]' }}${{ github.event.inputs.NETHUNTER == 'true' && ' [NH]' || '' }}${{ github.event.inputs.WIFI_DRIVERS == 'true' && ' [WIFI]' || '' }} ${{ github.event.inputs.SUFFIX }}
     runs-on: ubuntu-latest
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
@@ -87,7 +87,7 @@ jobs:
 
       - name: Validate Input Combinations
         run: |
-          echo "🔧 Validating input combinations..."
+          echo "Validating input combinations..."
           FILE="${{ github.event.inputs.FILE }}"
           declare -A VALID_COMBINATIONS=(
             ["manifest_aosp"]="mt6983 android12 5.10"
@@ -107,15 +107,11 @@ jobs:
             done
           }
           COMBINATION="$(get_combination "$FILE")" || {
-            echo "❌ Unknown FILE: $FILE"
-            echo "Valid base models:"
-            for model in "${!VALID_COMBINATIONS[@]}"; do
-              echo "- $model: ${VALID_COMBINATIONS[$model]}"
-            done
+            echo "Unknown FILE: $FILE"
             exit 1
           }
           read CPU ANDROID_VERSION KERNEL_VERSION <<< "$COMBINATION"
-          echo "✅ Valid combination: FILE=$FILE, CPU=$CPU, ANDROID_VERSION=$ANDROID_VERSION, KERNEL_VERSION=$KERNEL_VERSION"
+          echo "Valid: FILE=$FILE, CPU=$CPU, ANDROID=$ANDROID_VERSION, KERNEL=$KERNEL_VERSION"
           echo "CPU=$CPU" >> $GITHUB_ENV
           echo "ANDROID_VERSION=$ANDROID_VERSION" >> $GITHUB_ENV
           echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
@@ -151,14 +147,13 @@ jobs:
         run: |
           echo "CCACHE_DIR=$HOME/.ccache_${{ github.event.inputs.FILE }}" >> $GITHUB_ENV
           mkdir -p "$HOME/.ccache_${{ github.event.inputs.FILE }}"
-          echo "set: $HOME/.ccache_${{ github.event.inputs.FILE }}"
 
       - name: Configure Git
         run: |
           git config --global user.name "hemasai1109"
           git config --global user.email "pandunelluri.1109@gmail.com"
 
-      - name: Configure APTC
+      - name: Configure APT Cache
         run: |
           APT_CACHE_DIR="$HOME/apt-cache"
           mkdir -p "$APT_CACHE_DIR"/{archives,lists/partial}
@@ -173,35 +168,27 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.HOME }}/apt-cache
-          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/build_stock_kernel_n3.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-apt-
+          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/crom.yml') }}
+          restore-keys: ${{ runner.os }}-apt-
 
-      - name: Debug Show Selected Inputs
+      - name: Show Build Configuration
         run: |
           echo "=============================================="
-          echo "  Zabixii⚡ Kernel Build Configuration"
+          echo "  Zabixii Kernel Build Configuration"
           echo "=============================================="
-          echo "Selected CPU: ${{ env.CPU }}"
-          echo "Selected ANDROID_VERSION: ${{ env.ANDROID_VERSION }}"
-          echo "Selected KERNEL_VERSION: ${{ env.KERNEL_VERSION }}"
-          echo "Selected BUILD_METHOD: ${{ env.BUILD_METHOD }}"
-          echo "Selected FILE: ${{ github.event.inputs.FILE }}"
-          echo "Custom BUILD_TIME: ${{ github.event.inputs.BUILD_TIME }}"
-          echo "Custom SUFFIX: ${{ github.event.inputs.SUFFIX }}"
-          echo "Selected KSU: ${{ github.event.inputs.KSU }}"
-          echo "Selected FAST_BUILD: ${{ github.event.inputs.FAST_BUILD }}"
-          echo "Selected SUSFS_CI: ${{ github.event.inputs.SUSFS_CI }}"
-          echo "Selected VFS: ${{ github.event.inputs.VFS }}"
-          echo "Selected KPM: ${{ github.event.inputs.KPM }}"
-          echo "Selected NETHUNTER: ${{ github.event.inputs.NETHUNTER }}"
-          echo "Selected WIFI_DRIVERS: ${{ github.event.inputs.WIFI_DRIVERS }}"
-          echo "Custom KSU_META: ${{ github.event.inputs.KSU_META }}"
-          echo "=============================================="
+          echo "CPU: ${{ env.CPU }}"
+          echo "Android: ${{ env.ANDROID_VERSION }}"
+          echo "Kernel: ${{ env.KERNEL_VERSION }}"
+          echo "Build Method: ${{ env.BUILD_METHOD }}"
+          echo "FILE: ${{ github.event.inputs.FILE }}"
+          echo "SUFFIX: ${{ github.event.inputs.SUFFIX }}"
+          echo "KSU: ${{ github.event.inputs.KSU }}"
+          echo "NETHUNTER: ${{ github.event.inputs.NETHUNTER }}"
+          echo "WIFI_DRIVERS: ${{ github.event.inputs.WIFI_DRIVERS }}"
+          echo "FAST_BUILD: ${{ github.event.inputs.FAST_BUILD }}"
           if [ "${{ github.event.inputs.KSU }}" = "true" ]; then
-            echo "🔐 Building with KernelSU/SukiSU + SUSFS"
-          else
-            echo "🔓 Building for Magisk ONLY (no KSU)"
+            echo "VFS: ${{ github.event.inputs.VFS }}"
+            echo "KPM: ${{ github.event.inputs.KPM }}"
           fi
           echo "=============================================="
 
@@ -212,10 +199,8 @@ jobs:
           mkdir -p "$APT_CACHE_DIR/lists/partial"
           sudo apt -o Dir::Cache="$APT_CACHE_DIR" update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt -o Dir::Cache="$APT_CACHE_DIR" install -yq --no-install-recommends \
-            python3 git curl ccache libelf-dev \
-            build-essential flex bison libssl-dev \
-            libncurses-dev liblz4-tool zlib1g-dev \
-            libxml2-utils rsync unzip
+            python3 git curl ccache libelf-dev build-essential flex bison libssl-dev \
+            libncurses-dev liblz4-tool zlib1g-dev libxml2-utils rsync unzip
           sudo apt install -y libelf-dev ccache llvm lld
           sudo apt update -qq
 
@@ -223,23 +208,17 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ runner.os }}-${{ github.ref_name }}-${{ github.event.inputs.FILE }}-${{ env.BUILD_METHOD }}-${{ github.event.inputs.FAST_BUILD == 'true' && 'alpha' || 'beta' }}-15
+          key: ccache-${{ runner.os }}-${{ github.ref_name }}-${{ github.event.inputs.FILE }}-${{ env.BUILD_METHOD }}-${{ github.event.inputs.FAST_BUILD == 'true' && 'fast' || 'normal' }}-16
 
       - name: Initialize Ccache
         run: |
           INIT_FLAG="${{ env.CCACHE_DIR }}/.ccache_initialized"
           if command -v ccache >/dev/null 2>&1; then
             if [ ! -f "$INIT_FLAG" ]; then
-              echo "Initializing ccache (${{ env.CCACHE_DIR }})..."
               mkdir -p "${{ env.CCACHE_DIR }}"
               ccache -M ${{ env.CCACHE_MAXSIZE }}
               touch "$INIT_FLAG"
-              echo "ccache initialization complete"
-            else
-              echo "ccache already initialized, skipping"
             fi
-          else
-            echo "ccache not installed, skipping"
           fi
           ccache -s
 
@@ -263,89 +242,66 @@ jobs:
           mv build.config.oplus6983-d build.config.oplus6983
           ls -ls build.config.oplus6983
 
-      - name: Add in bash.rc
-        run: |
-          echo "BUILD_CONFIG=kernel-5.10/build.config.oplus6983" >> $GITHUB_ENV
+      - name: Set Build Config Path
+        run: echo "BUILD_CONFIG=kernel-5.10/build.config.oplus6983" >> $GITHUB_ENV
 
-      - name: Vendor Issue Fix
+      - name: Fix Vendor Directory Structure
         run: |
           cd kernel_workspace
           mv kernel_module/vendor .
           cd ..
           rm -rf kernel_module
-        
-      - name: Create thermal Makefile
+
+      - name: Create Thermal Makefile
         run: |
           cd kernel_workspace/vendor/oplus/kernel/cpu/thermal
           touch Makefile
           echo "obj-y += horae_shell_temp" > Makefile
           echo "obj-y += oplus_ipa_thermal" >> Makefile
-        
-      - name: Create Makefile in fingerprint mtk
+
+      - name: Create Fingerprint Makefile
         run: |
           cd kernel_workspace/vendor/oplus/secure/biometrics/fingerprints/bsp/drivers_kernel/component3.0/mtk
-          rm Makefile 
+          rm -f Makefile
           cat > Makefile <<'EOF'
           obj-$(CONFIG_OPLUS_FINGERPRINT_COMMON) += oplus_fp_common/
-
-          ### Capacitive fingerprint sensor
-          #obj-$(CONFIG_OPLUS_FINGERPRINT_FPC) += fpc/
-
-          #obj-$(CONFIG_OPLUS_FINGERPRINT_EGIS) += egis/
-
-          ### Optical fingerprint sensor
           ifneq ($(CONFIG_OPLUS_FINGERPRINT_GOODIX)_$(CONFIG_OPLUS_FINGERPRINT_GOODIX_OPTICAL), _)
           obj-y += goodix_optical_fp/
           endif
-          #obj-$(CONFIG_OPLUS_FINGERPRINT_SILEAD_OPTICAL) += silead_optical_fp/
-          #obj-$(CONFIG_OPLUS_FINGERPRINT_EGIS_OPTICAL)   += egis_optical_fp/
-          obj-$(CONFIG_OPLUS_FINGERPRINT_JIIOV_OPTICAL)  += anc_driver/
-          obj-$(CONFIG_OPLUS_FINGERPRINT_SILEAD_CAP)  += silead/
-
-          ### FEATURE MACRO
+          obj-$(CONFIG_OPLUS_FINGERPRINT_JIIOV_OPTICAL) += anc_driver/
+          obj-$(CONFIG_OPLUS_FINGERPRINT_SILEAD_CAP) += silead/
           ccflags-$(CONFIG_OPLUS_FINGERPRINT_NAVIGATION_ENABLE) += -DFP_NAVIGATION_ENABLE
           EOF
 
-      - name: Fix codec conflict by editing mt6357-accdet.c file
+      - name: Fix Audio Codec Conflict
         run: |
           cd kernel_workspace/kernel-5.10/sound/soc/codecs/
           sed -i 's/^int accdet_read_audio_res(unsigned int res_value)/int mt6357_accdet_read_audio_res(unsigned int res_value)/' mt6357-accdet.c
           sed -i 's/^EXPORT_SYMBOL(accdet_read_audio_res);/EXPORT_SYMBOL(mt6357_accdet_read_audio_res);/' mt6357-accdet.c
 
-      - name: Custom Kernel Suffix if set
+      - name: Apply Custom Kernel Suffix
         if: ${{ github.event.inputs.SUFFIX != '' }}
         run: |
           cd kernel_workspace
           SUFFIX="${{ github.event.inputs.SUFFIX }}"
           ANDROID_VERSION="${{ env.ANDROID_VERSION }}"
           FAST_BUILD="${{ github.event.inputs.FAST_BUILD }}"
-          for path in \
-            kernel-${{ env.KERNEL_VERSION }}/scripts/setlocalversion; do
+          for path in kernel-${{ env.KERNEL_VERSION }}/scripts/setlocalversion; do
             [ -f "$path" ] || continue
-            echo "Modifying: $path"
             sed -i 's/ -dirty//g' "$path"
             sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$path"
-            if grep -q 'KERNELVERSION.*scm_version' "$path"; then
-              echo "Detected NEW setlocalversion format"
-              sed -i "s|echo \"\${KERNELVERSION}.*scm_version}\"|echo \"\${KERNELVERSION}-${ANDROID_VERSION}-${SUFFIX}\"|" "$path"
-            elif grep -q 'echo "\$res"' "$path"; then
-              echo "Detected OLD setlocalversion format"
+            if grep -q 'echo "\$res"' "$path"; then
               if [ "$FAST_BUILD" = "true" ]; then
-                echo "FAST_BUILD enabled: using static res"
                 sed -i "s/^res=.*/res=\"-${ANDROID_VERSION}-${SUFFIX}\"/" "$path"
               else
-                echo "Standard build: injecting suffix via cut/echo"
                 tac "$path" | sed "0,/echo \"\\\$res\"/s//res=\\\$(echo \\\$res | cut -d- -f1-2)-${SUFFIX}; echo \"\\\$res\";/" | tac > "$path.tmp" && mv "$path.tmp" "$path"
               fi
-            else
-              echo "Unknown format, appending echo manually"
-              echo "echo \"\$res-${SUFFIX}\"" >> "$path"
             fi
             chmod +x "$path"
           done
           cd kernel-${{ env.KERNEL_VERSION }}
           git add -A
-          git commit -m "Custom suffix & removed -dirty"
+          git commit -m "Custom suffix: $SUFFIX"
 
       # ==========================================
       # KSU/SUKISU STEPS (ONLY IF KSU=true)
@@ -357,8 +313,6 @@ jobs:
           META="${{ github.event.inputs.KSU_META }}"
           BRANCH_NAME="${META%%/*}"
           CUSTOM_TAG="${META#*/}"
-          echo "Branch name: $BRANCH_NAME"
-          echo "Custom version identifier: $CUSTOM_TAG"
           curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s "$BRANCH_NAME"
           cd ./KernelSU
           KSU_API_VERSION=$(curl -fsSL "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/$BRANCH_NAME/kernel/Makefile" | \
@@ -373,18 +327,8 @@ jobs:
           echo "KSU_VERSION_FULL := $KSU_VERSION_FULL" >> kernel/Makefile
           KSU_VERSION=$(expr $(git rev-list --count main 2>/dev/null || echo 13000) + 10700)
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
-          grep -A5 "KSU_VERSION_API" kernel/Makefile
 
-      - name: Get Kernel Suffix
-        id: suffix_step
-        run: |
-          if [ "${{ github.event.inputs.SUFFIX }}" != "" ]; then
-            echo "suffix=${{ github.event.inputs.SUFFIX }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "suffix=${{ steps.random_suffix_step.outputs.suffix }}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Apply Patches SukiSU Ultra
+      - name: Apply SUSFS Patches
         if: ${{ github.event.inputs.KSU == 'true' }}
         run: |
           cd kernel_workspace
@@ -403,19 +347,18 @@ jobs:
           cp ../SukiSU_patch/69_hide_stuff.patch ./
           patch -p1 -F 3 < 69_hide_stuff.patch
 
-      - name: Apply VFS
+      - name: Apply VFS Hooks
         if: ${{ github.event.inputs.KSU == 'true' && github.event.inputs.VFS == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10
           cp ../SukiSU_patch/hooks/syscall_hooks.patch ./
           patch -p1 -F 3 < syscall_hooks.patch
 
-      - name: Add KSU Configuration Settings
+      - name: Add KSU Configuration
         if: ${{ github.event.inputs.KSU == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10
           CONFIG_FILE=./arch/arm64/configs/gki_defconfig
-          
           echo "CONFIG_KSU=y" >> "$CONFIG_FILE"
           if [ "${{ github.event.inputs.KPM }}" = "true" ]; then
             echo "CONFIG_KPM=y" >> "$CONFIG_FILE"
@@ -445,13 +388,16 @@ jobs:
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> "$CONFIG_FILE"
 
       # ==========================================
-      # COMMON CONFIG (BOTH KSU AND MAGISK)
+      # COMMON CONFIGS (BOTH KSU AND MAGISK)
       # ==========================================
-      - name: Add Common Configuration Settings
+      - name: Add Common Kernel Optimizations
         run: |
           cd kernel_workspace/kernel-5.10
           CONFIG_FILE=./arch/arm64/configs/gki_defconfig
           
+          # TCP/Network optimizations
+          echo "" >> "$CONFIG_FILE"
+          echo "# Common Optimizations" >> "$CONFIG_FILE"
           echo "CONFIG_TMPFS_XATTR=y" >> "$CONFIG_FILE"
           echo "CONFIG_TMPFS_POSIX_ACL=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$CONFIG_FILE"
@@ -468,164 +414,375 @@ jobs:
           sed -i 's/check_defconfig//' ./build.config.gki
 
       # ==========================================
-      # NETHUNTER WITH SMART CONFIG CHECKING
+      # NETHUNTER SMART CONFIG (WITH CONFLICT CHECK)
       # ==========================================
-      - name: Smart NetHunter Configuration (Auto-Check)
+      - name: Add NetHunter Kernel Configuration (Smart)
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10
           CONFIG_FILE=./arch/arm64/configs/gki_defconfig
           
           echo "=============================================="
-          echo "  Smart NetHunter Config Addition"
+          echo "  NetHunter Smart Config Addition"
           echo "=============================================="
           
-          # Function to safely add config
+          ADDED=0
+          SKIPPED=0
+          CONFLICT=0
+          
           add_config() {
-            local config_name="$1"
-            local config_value="$2"
-            local description="$3"
+            local name="$1"
+            local value="$2"
+            local desc="$3"
             
-            # Check if config already exists
-            if grep -q "^$config_name=" "$CONFIG_FILE"; then
-              EXISTING=$(grep "^$config_name=" "$CONFIG_FILE")
-              echo "⚠️  $config_name already exists: $EXISTING"
-              if [[ "$EXISTING" != "$config_name=$config_value" ]]; then
-                echo "   Conflict detected! Existing: $EXISTING, Wanted: $config_name=$config_value"
-                echo "   SKIPPING to avoid issues"
-                CONFLICTS=$((CONFLICTS + 1))
-              else
-                echo "   ✅ Already set correctly, skipping"
-                SKIPPED=$((SKIPPED + 1))
-              fi
-            elif grep -q "^# $config_name is not set" "$CONFIG_FILE"; then
-              echo "🔄 $config_name currently disabled, enabling..."
-              sed -i "s/^# $config_name is not set/$config_name=$config_value/" "$CONFIG_FILE"
+            if grep -q "^${name}=${value}" "$CONFIG_FILE"; then
+              echo "SKIP: $name already set correctly"
+              SKIPPED=$((SKIPPED + 1))
+            elif grep -q "^${name}=" "$CONFIG_FILE"; then
+              echo "CONFLICT: $name exists with different value - skipping"
+              CONFLICT=$((CONFLICT + 1))
+            elif grep -q "^# ${name} is not set" "$CONFIG_FILE"; then
+              sed -i "s/^# ${name} is not set/${name}=${value}/" "$CONFIG_FILE"
+              echo "ENABLED: $name ($desc)"
               ADDED=$((ADDED + 1))
             else
-              echo "✅ Adding NEW: $config_name=$config_value ($description)"
-              echo "$config_name=$config_value" >> "$CONFIG_FILE"
+              echo "${name}=${value}" >> "$CONFIG_FILE"
+              echo "ADDED: $name ($desc)"
               ADDED=$((ADDED + 1))
             fi
           }
           
-          ADDED=0
-          SKIPPED=0
-          CONFLICTS=0
+          echo "" >> "$CONFIG_FILE"
+          echo "# ===========================================" >> "$CONFIG_FILE"
+          echo "# NETHUNTER KERNEL SUPPORT" >> "$CONFIG_FILE"
+          echo "# ===========================================" >> "$CONFIG_FILE"
           
-          echo ""
-          echo "--- Adding NetHunter Configs ---"
-          echo ""
-          
-          # IKCONFIG (marker config)
+          # IKCONFIG (verification)
           add_config "CONFIG_IKCONFIG" "y" "Kernel config export"
           add_config "CONFIG_IKCONFIG_PROC" "y" "Kernel config in /proc"
           
           # USB Gadget/HID (BadUSB)
-          add_config "CONFIG_USB_CONFIGFS_F_HID" "y" "USB HID function"
+          add_config "CONFIG_USB_GADGET" "y" "USB Gadget framework"
+          add_config "CONFIG_USB_CONFIGFS" "y" "USB ConfigFS"
+          add_config "CONFIG_USB_CONFIGFS_F_HID" "y" "HID function"
           add_config "CONFIG_USB_F_HID" "y" "USB HID driver"
+          add_config "CONFIG_USB_G_HID" "y" "HID gadget"
+          add_config "CONFIG_USB_LIBCOMPOSITE" "y" "USB composite framework"
+          add_config "CONFIG_USB_CONFIGFS_SERIAL" "y" "USB serial"
+          add_config "CONFIG_USB_CONFIGFS_ACM" "y" "USB ACM"
+          add_config "CONFIG_USB_CONFIGFS_RNDIS" "y" "USB RNDIS"
+          add_config "CONFIG_USB_CONFIGFS_ECM" "y" "USB ECM"
+          add_config "CONFIG_USB_CONFIGFS_NCM" "y" "USB NCM"
+          add_config "CONFIG_USB_CONFIGFS_MASS_STORAGE" "y" "USB mass storage"
+          
+          # USB Host/OTG
+          add_config "CONFIG_USB" "y" "USB support"
+          add_config "CONFIG_USB_OTG" "y" "USB OTG"
+          add_config "CONFIG_USB_XHCI_HCD" "y" "xHCI"
+          add_config "CONFIG_USB_EHCI_HCD" "y" "EHCI"
+          add_config "CONFIG_USB_ACM" "y" "USB ACM"
+          add_config "CONFIG_USB_STORAGE" "y" "USB storage"
+          add_config "CONFIG_USB_UAS" "y" "USB UAS"
+          
+          # USB Serial adapters
+          add_config "CONFIG_USB_SERIAL" "y" "USB serial"
+          add_config "CONFIG_USB_SERIAL_GENERIC" "y" "Generic USB serial"
+          add_config "CONFIG_USB_SERIAL_CH341" "y" "CH341 serial"
+          add_config "CONFIG_USB_SERIAL_CP210X" "y" "CP210x serial"
+          add_config "CONFIG_USB_SERIAL_FTDI_SIO" "y" "FTDI serial"
+          add_config "CONFIG_USB_SERIAL_PL2303" "y" "PL2303 serial"
+          add_config "CONFIG_USB_SERIAL_OPTION" "y" "Option serial"
+          
+          # Wireless framework (NO drivers here)
+          add_config "CONFIG_WIRELESS" "y" "Wireless"
+          add_config "CONFIG_WIRELESS_EXT" "y" "Wireless extensions"
+          add_config "CONFIG_WEXT_CORE" "y" "WEXT core"
+          add_config "CONFIG_WEXT_PROC" "y" "WEXT proc"
+          add_config "CONFIG_WEXT_PRIV" "y" "WEXT priv"
+          add_config "CONFIG_CFG80211" "y" "cfg80211"
+          add_config "CONFIG_CFG80211_WEXT" "y" "cfg80211 WEXT"
+          add_config "CONFIG_MAC80211" "y" "mac80211"
+          add_config "CONFIG_MAC80211_MESH" "y" "mac80211 mesh"
+          add_config "CONFIG_RFKILL" "y" "RFKILL"
+          add_config "CONFIG_RFKILL_INPUT" "y" "RFKILL input"
+          
+          # Netfilter/iptables
+          add_config "CONFIG_NETFILTER" "y" "Netfilter"
+          add_config "CONFIG_NETFILTER_ADVANCED" "y" "Netfilter advanced"
+          add_config "CONFIG_NF_CONNTRACK" "y" "Connection tracking"
+          add_config "CONFIG_NF_NAT" "y" "NAT"
+          add_config "CONFIG_NF_TABLES" "y" "nftables"
+          add_config "CONFIG_IP_NF_IPTABLES" "y" "iptables"
+          add_config "CONFIG_IP_NF_FILTER" "y" "iptables filter"
+          add_config "CONFIG_IP_NF_NAT" "y" "iptables NAT"
+          add_config "CONFIG_IP_NF_TARGET_MASQUERADE" "y" "MASQUERADE"
+          add_config "CONFIG_IP_NF_TARGET_REDIRECT" "y" "REDIRECT"
+          add_config "CONFIG_IP_NF_MANGLE" "y" "Mangle table"
+          add_config "CONFIG_IP_NF_RAW" "y" "Raw table"
+          add_config "CONFIG_IP6_NF_IPTABLES" "y" "ip6tables"
+          add_config "CONFIG_IP6_NF_FILTER" "y" "ip6tables filter"
+          add_config "CONFIG_IP6_NF_NAT" "y" "ip6tables NAT"
+          add_config "CONFIG_IP6_NF_TARGET_MASQUERADE" "y" "ip6 MASQUERADE"
+          add_config "CONFIG_NETFILTER_XT_TARGET_LOG" "y" "LOG target"
+          add_config "CONFIG_NETFILTER_XT_TARGET_NFLOG" "y" "NFLOG target"
+          add_config "CONFIG_NETFILTER_XT_TARGET_TPROXY" "y" "TPROXY target"
+          add_config "CONFIG_NETFILTER_XT_TARGET_REDIRECT" "y" "REDIRECT target"
+          add_config "CONFIG_NETFILTER_XT_TARGET_TEE" "y" "TEE target"
+          add_config "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE" "y" "addrtype match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_CONNTRACK" "y" "conntrack match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_HASHLIMIT" "y" "hashlimit match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_IPRANGE" "y" "iprange match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_LENGTH" "y" "length match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_LIMIT" "y" "limit match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_MAC" "y" "mac match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_MARK" "y" "mark match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_MULTIPORT" "y" "multiport match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_OWNER" "y" "owner match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_STATE" "y" "state match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_STRING" "y" "string match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_U32" "y" "u32 match"
+          
+          # Namespaces (NO USER_NS - causes bootloop)
+          add_config "CONFIG_NAMESPACES" "y" "Namespaces"
+          add_config "CONFIG_NET_NS" "y" "Network namespaces"
+          add_config "CONFIG_PID_NS" "y" "PID namespaces"
+          add_config "CONFIG_IPC_NS" "y" "IPC namespaces"
+          add_config "CONFIG_UTS_NS" "y" "UTS namespaces"
+          add_config "CONFIG_CGROUPS" "y" "Control groups"
+          
+          # Bluetooth
+          add_config "CONFIG_BT" "y" "Bluetooth"
+          add_config "CONFIG_BT_BREDR" "y" "Bluetooth BR/EDR"
+          add_config "CONFIG_BT_LE" "y" "Bluetooth LE"
+          add_config "CONFIG_BT_RFCOMM" "y" "RFCOMM"
+          add_config "CONFIG_BT_RFCOMM_TTY" "y" "RFCOMM TTY"
+          add_config "CONFIG_BT_BNEP" "y" "BNEP"
+          add_config "CONFIG_BT_HIDP" "y" "HIDP"
+          add_config "CONFIG_BT_HCIBTUSB" "y" "HCI USB"
+          add_config "CONFIG_BT_HCIUART" "y" "HCI UART"
+          
+          # Input/HID
+          add_config "CONFIG_INPUT" "y" "Input"
+          add_config "CONFIG_INPUT_EVDEV" "y" "Event device"
+          add_config "CONFIG_INPUT_UINPUT" "y" "User input"
+          add_config "CONFIG_INPUT_MISC" "y" "Input misc"
+          add_config "CONFIG_HID" "y" "HID"
+          add_config "CONFIG_HIDRAW" "y" "HID raw"
+          add_config "CONFIG_UHID" "y" "User HID"
+          add_config "CONFIG_USB_HID" "y" "USB HID"
           
           # Networking
-          add_config "CONFIG_TUN" "y" "TUN/TAP driver"
+          add_config "CONFIG_NET" "y" "Networking"
+          add_config "CONFIG_PACKET" "y" "Packet socket"
+          add_config "CONFIG_UNIX" "y" "Unix sockets"
+          add_config "CONFIG_INET" "y" "TCP/IP"
+          add_config "CONFIG_IP_MULTICAST" "y" "IP multicast"
+          add_config "CONFIG_IP_ADVANCED_ROUTER" "y" "Advanced router"
+          add_config "CONFIG_IP_MULTIPLE_TABLES" "y" "Multiple routing tables"
+          add_config "CONFIG_NET_IPGRE" "y" "GRE tunnels"
+          add_config "CONFIG_SYN_COOKIES" "y" "SYN cookies"
+          add_config "CONFIG_TUN" "y" "TUN/TAP"
           add_config "CONFIG_VETH" "y" "Virtual ethernet"
-          add_config "CONFIG_BRIDGE" "y" "Ethernet bridging"
+          add_config "CONFIG_BRIDGE" "y" "Ethernet bridge"
+          add_config "CONFIG_VLAN_8021Q" "y" "802.1Q VLAN"
+          add_config "CONFIG_MACVLAN" "y" "MAC VLAN"
+          add_config "CONFIG_IPVLAN" "y" "IP VLAN"
+          add_config "CONFIG_DUMMY" "y" "Dummy interface"
           
-          # Input
-          add_config "CONFIG_INPUT_UINPUT" "y" "User-space input driver"
-          add_config "CONFIG_UHID" "y" "User-space HID driver"
+          # PPP/VPN
+          add_config "CONFIG_PPP" "y" "PPP"
+          add_config "CONFIG_PPP_BSDCOMP" "y" "PPP BSD comp"
+          add_config "CONFIG_PPP_DEFLATE" "y" "PPP deflate"
+          add_config "CONFIG_PPP_MPPE" "y" "PPP MPPE"
+          add_config "CONFIG_PPPOE" "y" "PPPoE"
+          add_config "CONFIG_PPTP" "y" "PPTP"
+          add_config "CONFIG_PPPOL2TP" "y" "L2TP"
+          add_config "CONFIG_PPP_ASYNC" "y" "PPP async"
+          add_config "CONFIG_PPP_SYNC_TTY" "y" "PPP sync TTY"
           
-          # Wireless framework (no drivers)
-          add_config "CONFIG_WIRELESS_EXT" "y" "Wireless extensions"
-          add_config "CONFIG_CFG80211_WEXT" "y" "cfg80211 wireless extensions compat"
-          
-          # Netfilter additions (only safe ones)
-          add_config "CONFIG_NETFILTER_XT_TARGET_TPROXY" "y" "TPROXY target"
-          add_config "CONFIG_NETFILTER_XT_MATCH_U32" "y" "u32 match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_STRING" "y" "string match"
+          # Crypto
+          add_config "CONFIG_CRYPTO" "y" "Crypto"
+          add_config "CONFIG_CRYPTO_USER" "y" "Crypto user"
+          add_config "CONFIG_CRYPTO_USER_API" "y" "Crypto user API"
+          add_config "CONFIG_CRYPTO_USER_API_HASH" "y" "Crypto hash API"
+          add_config "CONFIG_CRYPTO_USER_API_SKCIPHER" "y" "Crypto skcipher API"
+          add_config "CONFIG_CRYPTO_AES" "y" "AES"
+          add_config "CONFIG_CRYPTO_SHA256" "y" "SHA256"
+          add_config "CONFIG_CRYPTO_SHA512" "y" "SHA512"
+          add_config "CONFIG_CRYPTO_GCM" "y" "GCM"
+          add_config "CONFIG_CRYPTO_CBC" "y" "CBC"
+          add_config "CONFIG_CRYPTO_HMAC" "y" "HMAC"
           
           # Filesystems
-          add_config "CONFIG_OVERLAY_FS" "y" "Overlay filesystem"
+          add_config "CONFIG_EXT4_FS" "y" "ext4"
+          add_config "CONFIG_EXT4_FS_POSIX_ACL" "y" "ext4 ACL"
+          add_config "CONFIG_EXT4_FS_SECURITY" "y" "ext4 security"
+          add_config "CONFIG_FUSE_FS" "y" "FUSE"
+          add_config "CONFIG_OVERLAY_FS" "y" "OverlayFS"
           add_config "CONFIG_SQUASHFS" "y" "SquashFS"
+          add_config "CONFIG_SQUASHFS_XATTR" "y" "SquashFS xattr"
+          add_config "CONFIG_SQUASHFS_ZLIB" "y" "SquashFS zlib"
+          add_config "CONFIG_SQUASHFS_LZ4" "y" "SquashFS lz4"
+          add_config "CONFIG_SQUASHFS_LZO" "y" "SquashFS lzo"
+          add_config "CONFIG_SQUASHFS_XZ" "y" "SquashFS xz"
+          add_config "CONFIG_SQUASHFS_ZSTD" "y" "SquashFS zstd"
+          add_config "CONFIG_TMPFS" "y" "tmpfs"
+          add_config "CONFIG_TMPFS_POSIX_ACL" "y" "tmpfs ACL"
+          add_config "CONFIG_TMPFS_XATTR" "y" "tmpfs xattr"
+          add_config "CONFIG_CIFS" "y" "CIFS"
+          add_config "CONFIG_NFS_FS" "y" "NFS"
           
-          # PPP/VPN (safe ones only)
-          add_config "CONFIG_PPP" "y" "PPP support"
-          add_config "CONFIG_PPP_MPPE" "y" "PPP MPPE encryption"
+          # Firmware loading
+          add_config "CONFIG_FW_LOADER" "y" "Firmware loader"
+          add_config "CONFIG_FW_LOADER_USER_HELPER" "y" "Firmware user helper"
+          add_config "CONFIG_FW_LOADER_USER_HELPER_FALLBACK" "y" "Firmware fallback"
+          
+          # Misc
+          add_config "CONFIG_SECCOMP" "y" "Seccomp"
+          add_config "CONFIG_BINFMT_MISC" "y" "Misc binaries"
+          add_config "CONFIG_SYSVIPC" "y" "System V IPC"
+          add_config "CONFIG_POSIX_MQUEUE" "y" "POSIX mqueue"
+          add_config "CONFIG_MAGIC_SYSRQ" "y" "Magic SysRq"
+          add_config "CONFIG_DEBUG_FS" "y" "DebugFS"
           
           echo ""
           echo "=============================================="
-          echo "  Configuration Summary"
+          echo "  Summary"
           echo "=============================================="
-          echo "✅ Added: $ADDED"
-          echo "⏭️  Skipped (already correct): $SKIPPED"
-          echo "⚠️  Conflicts avoided: $CONFLICTS"
+          echo "Added: $ADDED"
+          echo "Skipped (already correct): $SKIPPED"
+          echo "Conflicts avoided: $CONFLICT"
           echo "=============================================="
 
-      - name: Validate Config After Addition
-        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
+      # ==========================================
+      # WIFI DRIVERS (MAINLINE + OUT-OF-TREE)
+      # ==========================================
+      - name: Add Wi-Fi Driver Configs (Mainline)
+        if: ${{ github.event.inputs.WIFI_DRIVERS == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10
+          CONFIG_FILE=./arch/arm64/configs/gki_defconfig
           
-          echo "=============================================="
-          echo "  Validating NetHunter Configs"
-          echo "=============================================="
+          echo "" >> "$CONFIG_FILE"
+          echo "# ===========================================" >> "$CONFIG_FILE"
+          echo "# WIFI DRIVERS (MAINLINE)" >> "$CONFIG_FILE"
+          echo "# ===========================================" >> "$CONFIG_FILE"
           
-          # Generate test .config to see what will actually be enabled
-          make ARCH=arm64 gki_defconfig O=.config_test_nh 2>&1 | grep -v "GEN\|HOSTCC" || true
+          # Atheros (AR9271 - BEST for injection)
+          echo "CONFIG_ATH_COMMON=y" >> "$CONFIG_FILE"
+          echo "CONFIG_ATH9K=y" >> "$CONFIG_FILE"
+          echo "CONFIG_ATH9K_HTC=y" >> "$CONFIG_FILE"
+          echo "CONFIG_ATH9K_HW=y" >> "$CONFIG_FILE"
+          echo "CONFIG_ATH9K_COMMON=y" >> "$CONFIG_FILE"
           
-          echo ""
-          echo "Checking if our configs will be enabled:"
+          # Ralink (RT3070/RT5370)
+          echo "CONFIG_RT2X00=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RT2800USB=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RT2800_LIB=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RT2X00_LIB_USB=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RT2X00_LIB=y" >> "$CONFIG_FILE"
           
-          CONFIGS_TO_CHECK=(
-            "CONFIG_IKCONFIG_PROC"
-            "CONFIG_USB_CONFIGFS_F_HID"
-            "CONFIG_TUN"
-            "CONFIG_BRIDGE"
-            "CONFIG_INPUT_UINPUT"
-            "CONFIG_OVERLAY_FS"
-          )
+          # MediaTek
+          echo "CONFIG_MT7601U=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MT76_CORE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MT76_USB=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MT76x0_COMMON=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MT76x0U=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MT76x2_COMMON=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MT76x2U=y" >> "$CONFIG_FILE"
           
-          SUCCESS=0
-          FAILED=0
+          # Realtek (mainline - limited injection)
+          echo "CONFIG_RTL8XXXU=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RTL8192CU=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RTLWIFI=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RTLWIFI_USB=y" >> "$CONFIG_FILE"
           
-          for cfg in "${CONFIGS_TO_CHECK[@]}"; do
-            if grep -q "^$cfg=y" .config_test_nh/.config 2>/dev/null; then
-              echo "✅ $cfg will be enabled"
-              SUCCESS=$((SUCCESS + 1))
-            else
-              echo "❌ $cfg NOT enabled (dependency missing?)"
-              FAILED=$((FAILED + 1))
-            fi
-          done
+          # Zydas
+          echo "CONFIG_ZD1211RW=y" >> "$CONFIG_FILE"
           
-          echo ""
-          echo "Validation: $SUCCESS succeeded, $FAILED failed"
-          
-          # Clean up test dir
-          rm -rf .config_test_nh
+          echo "Mainline Wi-Fi drivers added."
 
-      - name: Custom BUILD_TIME
-        if: ${{ github.event.inputs.BUILD_TIME != '' && !contains('Ff', github.event.inputs.BUILD_TIME) }}
-        shell: bash
+      - name: Clone External Wi-Fi Drivers (Out-of-tree)
+        if: ${{ github.event.inputs.WIFI_DRIVERS == 'true' }}
+        run: |
+          cd kernel_workspace/kernel-5.10/drivers/net/wireless
+          
+          echo "Cloning RTL8812AU (aircrack-ng)..."
+          git clone https://github.com/aircrack-ng/rtl8812au.git --depth=1 || true
+          
+          echo "Cloning RTL8814AU..."
+          git clone https://github.com/aircrack-ng/rtl8814au.git --depth=1 || true
+          
+          echo "Cloning RTL8188EUS..."
+          git clone https://github.com/aircrack-ng/rtl8188eus.git --depth=1 || true
+          
+          echo "Cloning RTL88x2BU..."
+          git clone https://github.com/morrownr/88x2bu-20210702.git rtl88x2bu --depth=1 || true
+          
+          echo "External drivers cloned."
+
+      - name: Integrate External Wi-Fi Drivers
+        if: ${{ github.event.inputs.WIFI_DRIVERS == 'true' }}
+        run: |
+          cd kernel_workspace/kernel-5.10/drivers/net/wireless
+          
+          # Update Kconfig
+          if ! grep -q "rtl8812au" Kconfig; then
+            echo 'source "drivers/net/wireless/rtl8812au/Kconfig"' >> Kconfig
+          fi
+          if ! grep -q "rtl8814au" Kconfig; then
+            echo 'source "drivers/net/wireless/rtl8814au/Kconfig"' >> Kconfig
+          fi
+          if ! grep -q "rtl8188eus" Kconfig; then
+            echo 'source "drivers/net/wireless/rtl8188eus/Kconfig"' >> Kconfig
+          fi
+          if ! grep -q "rtl88x2bu" Kconfig; then
+            echo 'source "drivers/net/wireless/rtl88x2bu/Kconfig"' >> Kconfig
+          fi
+          
+          # Update Makefile
+          if ! grep -q "rtl8812au" Makefile; then
+            echo 'obj-$(CONFIG_88XXAU) += rtl8812au/' >> Makefile
+          fi
+          if ! grep -q "rtl8814au" Makefile; then
+            echo 'obj-$(CONFIG_RTL8814AU) += rtl8814au/' >> Makefile
+          fi
+          if ! grep -q "rtl8188eus" Makefile; then
+            echo 'obj-$(CONFIG_RTL8188EUS) += rtl8188eus/' >> Makefile
+          fi
+          if ! grep -q "rtl88x2bu" Makefile; then
+            echo 'obj-$(CONFIG_RTL8822BU) += rtl88x2bu/' >> Makefile
+          fi
+          
+          echo "External drivers integrated."
+          
+          # Add configs
+          CONFIG_FILE=../../arch/arm64/configs/gki_defconfig
+          echo "" >> "$CONFIG_FILE"
+          echo "# OUT-OF-TREE WIFI DRIVERS" >> "$CONFIG_FILE"
+          echo "CONFIG_88XXAU=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RTL8814AU=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RTL8188EUS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RTL8822BU=y" >> "$CONFIG_FILE"
+
+      # ==========================================
+      # BUILD FIXES
+      # ==========================================
+      - name: Fix Build Issues
+        run: |
+          sed -i '/goto show_pad;/d' kernel_workspace/kernel-5.10/fs/proc/task_mmu.c
+
+      - name: Custom Build Time
+        if: ${{ github.event.inputs.BUILD_TIME != '' && github.event.inputs.BUILD_TIME != 'F' }}
         run: |
           DATESTR="${{ github.event.inputs.BUILD_TIME }}"
           echo "KBUILD_BUILD_TIMESTAMP=${DATESTR}" >> "$GITHUB_ENV"
           echo "KBUILD_BUILD_VERSION=1" >> "$GITHUB_ENV"
-          cd kernel_workspace/kernel-5.10/
-          for f in common/scripts/mkcompile_h msm-kernel/scripts/mkcompile_h; do
-            if [ -f "$f" ]; then
-              if grep -q 'UTS_VERSION=' "$f"; then
-                perl -pi -e "s{UTS_VERSION=\"\\\$\\(.*?\\)\"}{UTS_VERSION=\"#1 SMP PREEMPT $DATESTR\"}" "$f"
-              fi
-            fi
-          done
 
-      - name: Fix undeclared show_pad label
-        run: |
-          sed -i '/goto show_pad;/d' kernel_workspace/kernel-5.10/fs/proc/task_mmu.c
-
-      - name: Build Kernel FAST
-        if: ${{ github.event.inputs.FAST_BUILD == 'true' }}
-        id: fast_build
+      # ==========================================
+      # BUILD
+      # ==========================================
+      - name: Build Kernel
         run: |
           cd kernel_workspace/
           export PATH="/usr/lib/ccache:$PATH"
@@ -633,30 +790,34 @@ jobs:
           ./build/build.sh
           ccache -s
 
-      - name: Verify Kernel Build Output
+      - name: Verify Kernel Build
         run: |
-          KERNEL_IMAGE="kernel_workspace/out/android12-5.10/kernel-5.10/arch/arm64/boot/Image.gz"
+          IMAGE="kernel_workspace/out/android12-5.10/kernel-5.10/arch/arm64/boot/Image.gz"
           
-          if [ ! -f "$KERNEL_IMAGE" ]; then
-            echo "❌ ERROR: Image.gz not found!"
+          if [ ! -f "$IMAGE" ]; then
+            echo "ERROR: Image.gz not found!"
             exit 1
           fi
           
-          SIZE=$(stat -c%s "$KERNEL_IMAGE")
-          echo "✅ Image.gz found!"
-          echo "   Size: $SIZE bytes ($(($SIZE / 1024 / 1024)) MB)"
+          SIZE=$(stat -c%s "$IMAGE")
+          echo "Image.gz: $SIZE bytes ($(($SIZE / 1024 / 1024)) MB)"
           
           if [ "$SIZE" -lt 1000000 ]; then
-            echo "❌ WARNING: Image.gz too small!"
+            echo "ERROR: Image.gz too small!"
             exit 1
           fi
+          
+          echo "Kernel built successfully!"
 
-      - name: Make AnyKernel3_Zabixii
+      # ==========================================
+      # PACKAGE
+      # ==========================================
+      - name: Create AnyKernel3 Package
         run: |
           git clone https://github.com/darklord4567/Anykernel3_AOSP_NORD3.git --depth=1 Anykernel3_Zabixii
           cp kernel_workspace/out/android12-5.10/kernel-5.10/arch/arm64/boot/Image.gz Anykernel3_Zabixii/Image.gz
 
-      - name: Set zip Suffix
+      - name: Set Artifact Suffix
         id: suffix
         run: |
           KSU_SUFFIX=""
@@ -680,11 +841,11 @@ jobs:
           fi
           echo "value=${KSU_SUFFIX}${NH_SUFFIX}" >> $GITHUB_OUTPUT
 
-      - name: Upload AnyKernel3_Zabixii
+      - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "Zabixii_Kernel${{ steps.suffix.outputs.value }}_by_Zabixii⚡"
+          name: "Zabixii_Kernel${{ steps.suffix.outputs.value }}_by_Zabixii"
           path: ./Anykernel3_Zabixii/*
 
-      - name: Post-build Disk Check
+      - name: Post-Build Disk Check
         run: df -h
