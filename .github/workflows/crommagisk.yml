@@ -756,8 +756,8 @@ jobs:
           
           echo "External drivers integrated."
           
-          # Add configs
-          CONFIG_FILE=../../arch/arm64/configs/gki_defconfig
+          # Add configs - need to go up 3 levels from drivers/net/wireless
+          CONFIG_FILE=../../../arch/arm64/configs/gki_defconfig
           echo "" >> "$CONFIG_FILE"
           echo "# OUT-OF-TREE WIFI DRIVERS" >> "$CONFIG_FILE"
           echo "CONFIG_88XXAU=y" >> "$CONFIG_FILE"
