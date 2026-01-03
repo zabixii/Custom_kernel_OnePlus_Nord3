@@ -59,7 +59,7 @@ on:
         default: true
       WIFI_DRIVERS:
         type: boolean
-        description: "Include external Wi-Fi drivers? (RTL8812AU, ATH9K, MT76, etc.)"
+        description: "Include external Wi-Fi drivers? (RTL8812AU, ATH9K, etc.)"
         required: true
         default: true
 
@@ -208,7 +208,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ runner.os }}-${{ github.ref_name }}-${{ github.event.inputs.FILE }}-${{ env.BUILD_METHOD }}-${{ github.event.inputs.FAST_BUILD == 'true' && 'fast' || 'normal' }}-16
+          key: ccache-${{ runner.os }}-${{ github.ref_name }}-${{ github.event.inputs.FILE }}-${{ env.BUILD_METHOD }}-${{ github.event.inputs.FAST_BUILD == 'true' && 'fast' || 'normal' }}-17
 
       - name: Initialize Ccache
         run: |
@@ -263,7 +263,7 @@ jobs:
         run: |
           cd kernel_workspace/vendor/oplus/secure/biometrics/fingerprints/bsp/drivers_kernel/component3.0/mtk
           rm -f Makefile
-          cat > Makefile <<'EOF'
+          cat > Makefile << 'EOF'
           obj-$(CONFIG_OPLUS_FINGERPRINT_COMMON) += oplus_fp_common/
           ifneq ($(CONFIG_OPLUS_FINGERPRINT_GOODIX)_$(CONFIG_OPLUS_FINGERPRINT_GOODIX_OPTICAL), _)
           obj-y += goodix_optical_fp/
@@ -394,8 +394,6 @@ jobs:
         run: |
           cd kernel_workspace/kernel-5.10
           CONFIG_FILE=./arch/arm64/configs/gki_defconfig
-          
-          # TCP/Network optimizations
           echo "" >> "$CONFIG_FILE"
           echo "# Common Optimizations" >> "$CONFIG_FILE"
           echo "CONFIG_TMPFS_XATTR=y" >> "$CONFIG_FILE"
@@ -410,252 +408,234 @@ jobs:
           echo "CONFIG_TCP_ECN=y" >> "$CONFIG_FILE"
           echo "CONFIG_IPV6_ECN=y" >> "$CONFIG_FILE"
           echo "CONFIG_IP_NF_TARGET_ECN=y" >> "$CONFIG_FILE"
-          
           sed -i 's/check_defconfig//' ./build.config.gki
 
       # ==========================================
-      # NETHUNTER SMART CONFIG (WITH CONFLICT CHECK)
+      # NETHUNTER CONFIGS
       # ==========================================
-      - name: Add NetHunter Kernel Configuration (Smart)
+      - name: Add NetHunter Kernel Configuration
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10
           CONFIG_FILE=./arch/arm64/configs/gki_defconfig
           
           echo "=============================================="
-          echo "  NetHunter Smart Config Addition"
+          echo "  Adding NetHunter Kernel Configs"
           echo "=============================================="
           
-          ADDED=0
-          SKIPPED=0
-          CONFLICT=0
-          
           add_config() {
-            local name="$1"
-            local value="$2"
-            local desc="$3"
+            local config="$1"
+            local desc="$2"
+            local name="${config%%=*}"
             
-            if grep -q "^${name}=${value}" "$CONFIG_FILE"; then
-              echo "SKIP: $name already set correctly"
-              SKIPPED=$((SKIPPED + 1))
-            elif grep -q "^${name}=" "$CONFIG_FILE"; then
-              echo "CONFLICT: $name exists with different value - skipping"
-              CONFLICT=$((CONFLICT + 1))
+            if grep -q "^${name}=" "$CONFIG_FILE"; then
+              echo "SKIP: $name already set"
             elif grep -q "^# ${name} is not set" "$CONFIG_FILE"; then
-              sed -i "s/^# ${name} is not set/${name}=${value}/" "$CONFIG_FILE"
+              sed -i "s/^# ${name} is not set/${config}/" "$CONFIG_FILE"
               echo "ENABLED: $name ($desc)"
-              ADDED=$((ADDED + 1))
             else
-              echo "${name}=${value}" >> "$CONFIG_FILE"
+              echo "$config" >> "$CONFIG_FILE"
               echo "ADDED: $name ($desc)"
-              ADDED=$((ADDED + 1))
             fi
           }
           
           echo "" >> "$CONFIG_FILE"
           echo "# ===========================================" >> "$CONFIG_FILE"
-          echo "# NETHUNTER KERNEL SUPPORT" >> "$CONFIG_FILE"
+          echo "# NETHUNTER SUPPORT" >> "$CONFIG_FILE"
           echo "# ===========================================" >> "$CONFIG_FILE"
           
-          # IKCONFIG (verification)
-          add_config "CONFIG_IKCONFIG" "y" "Kernel config export"
-          add_config "CONFIG_IKCONFIG_PROC" "y" "Kernel config in /proc"
+          # IKCONFIG
+          add_config "CONFIG_IKCONFIG=y" "Kernel config export"
+          add_config "CONFIG_IKCONFIG_PROC=y" "Kernel config in /proc"
           
-          # USB Gadget/HID (BadUSB)
-          add_config "CONFIG_USB_GADGET" "y" "USB Gadget framework"
-          add_config "CONFIG_USB_CONFIGFS" "y" "USB ConfigFS"
-          add_config "CONFIG_USB_CONFIGFS_F_HID" "y" "HID function"
-          add_config "CONFIG_USB_F_HID" "y" "USB HID driver"
-          add_config "CONFIG_USB_G_HID" "y" "HID gadget"
-          add_config "CONFIG_USB_LIBCOMPOSITE" "y" "USB composite framework"
-          add_config "CONFIG_USB_CONFIGFS_SERIAL" "y" "USB serial"
-          add_config "CONFIG_USB_CONFIGFS_ACM" "y" "USB ACM"
-          add_config "CONFIG_USB_CONFIGFS_RNDIS" "y" "USB RNDIS"
-          add_config "CONFIG_USB_CONFIGFS_ECM" "y" "USB ECM"
-          add_config "CONFIG_USB_CONFIGFS_NCM" "y" "USB NCM"
-          add_config "CONFIG_USB_CONFIGFS_MASS_STORAGE" "y" "USB mass storage"
+          # USB Gadget/HID
+          add_config "CONFIG_USB_GADGET=y" "USB Gadget framework"
+          add_config "CONFIG_USB_CONFIGFS=y" "USB ConfigFS"
+          add_config "CONFIG_USB_CONFIGFS_F_HID=y" "HID function"
+          add_config "CONFIG_USB_F_HID=y" "USB HID driver"
+          add_config "CONFIG_USB_G_HID=y" "HID gadget"
+          add_config "CONFIG_USB_CONFIGFS_SERIAL=y" "USB serial"
+          add_config "CONFIG_USB_CONFIGFS_ACM=y" "USB ACM"
+          add_config "CONFIG_USB_CONFIGFS_RNDIS=y" "USB RNDIS"
+          add_config "CONFIG_USB_CONFIGFS_ECM=y" "USB ECM"
+          add_config "CONFIG_USB_CONFIGFS_NCM=y" "USB NCM"
+          add_config "CONFIG_USB_CONFIGFS_MASS_STORAGE=y" "USB mass storage"
           
           # USB Host/OTG
-          add_config "CONFIG_USB" "y" "USB support"
-          add_config "CONFIG_USB_OTG" "y" "USB OTG"
-          add_config "CONFIG_USB_XHCI_HCD" "y" "xHCI"
-          add_config "CONFIG_USB_EHCI_HCD" "y" "EHCI"
-          add_config "CONFIG_USB_ACM" "y" "USB ACM"
-          add_config "CONFIG_USB_STORAGE" "y" "USB storage"
-          add_config "CONFIG_USB_UAS" "y" "USB UAS"
+          add_config "CONFIG_USB=y" "USB support"
+          add_config "CONFIG_USB_OTG=y" "USB OTG"
+          add_config "CONFIG_USB_XHCI_HCD=y" "xHCI"
+          add_config "CONFIG_USB_EHCI_HCD=y" "EHCI"
+          add_config "CONFIG_USB_ACM=y" "USB ACM"
+          add_config "CONFIG_USB_STORAGE=y" "USB storage"
+          add_config "CONFIG_USB_UAS=y" "USB UAS"
           
-          # USB Serial adapters
-          add_config "CONFIG_USB_SERIAL" "y" "USB serial"
-          add_config "CONFIG_USB_SERIAL_GENERIC" "y" "Generic USB serial"
-          add_config "CONFIG_USB_SERIAL_CH341" "y" "CH341 serial"
-          add_config "CONFIG_USB_SERIAL_CP210X" "y" "CP210x serial"
-          add_config "CONFIG_USB_SERIAL_FTDI_SIO" "y" "FTDI serial"
-          add_config "CONFIG_USB_SERIAL_PL2303" "y" "PL2303 serial"
-          add_config "CONFIG_USB_SERIAL_OPTION" "y" "Option serial"
+          # USB Serial
+          add_config "CONFIG_USB_SERIAL=y" "USB serial"
+          add_config "CONFIG_USB_SERIAL_GENERIC=y" "Generic USB serial"
+          add_config "CONFIG_USB_SERIAL_CH341=y" "CH341 serial"
+          add_config "CONFIG_USB_SERIAL_CP210X=y" "CP210x serial"
+          add_config "CONFIG_USB_SERIAL_FTDI_SIO=y" "FTDI serial"
+          add_config "CONFIG_USB_SERIAL_PL2303=y" "PL2303 serial"
+          add_config "CONFIG_USB_SERIAL_OPTION=y" "Option serial"
           
-          # Wireless framework (NO drivers here)
-          add_config "CONFIG_WIRELESS" "y" "Wireless"
-          add_config "CONFIG_WIRELESS_EXT" "y" "Wireless extensions"
-          add_config "CONFIG_WEXT_CORE" "y" "WEXT core"
-          add_config "CONFIG_WEXT_PROC" "y" "WEXT proc"
-          add_config "CONFIG_WEXT_PRIV" "y" "WEXT priv"
-          add_config "CONFIG_CFG80211" "y" "cfg80211"
-          add_config "CONFIG_CFG80211_WEXT" "y" "cfg80211 WEXT"
-          add_config "CONFIG_MAC80211" "y" "mac80211"
-          add_config "CONFIG_MAC80211_MESH" "y" "mac80211 mesh"
-          add_config "CONFIG_RFKILL" "y" "RFKILL"
-          add_config "CONFIG_RFKILL_INPUT" "y" "RFKILL input"
+          # Wireless framework
+          add_config "CONFIG_WIRELESS=y" "Wireless"
+          add_config "CONFIG_WIRELESS_EXT=y" "Wireless extensions"
+          add_config "CONFIG_WEXT_CORE=y" "WEXT core"
+          add_config "CONFIG_WEXT_PROC=y" "WEXT proc"
+          add_config "CONFIG_WEXT_PRIV=y" "WEXT priv"
+          add_config "CONFIG_CFG80211=y" "cfg80211"
+          add_config "CONFIG_CFG80211_WEXT=y" "cfg80211 WEXT"
+          add_config "CONFIG_MAC80211=y" "mac80211"
+          add_config "CONFIG_MAC80211_MESH=y" "mac80211 mesh"
+          add_config "CONFIG_RFKILL=y" "RFKILL"
+          add_config "CONFIG_RFKILL_INPUT=y" "RFKILL input"
           
           # Netfilter/iptables
-          add_config "CONFIG_NETFILTER" "y" "Netfilter"
-          add_config "CONFIG_NETFILTER_ADVANCED" "y" "Netfilter advanced"
-          add_config "CONFIG_NF_CONNTRACK" "y" "Connection tracking"
-          add_config "CONFIG_NF_NAT" "y" "NAT"
-          add_config "CONFIG_NF_TABLES" "y" "nftables"
-          add_config "CONFIG_IP_NF_IPTABLES" "y" "iptables"
-          add_config "CONFIG_IP_NF_FILTER" "y" "iptables filter"
-          add_config "CONFIG_IP_NF_NAT" "y" "iptables NAT"
-          add_config "CONFIG_IP_NF_TARGET_MASQUERADE" "y" "MASQUERADE"
-          add_config "CONFIG_IP_NF_TARGET_REDIRECT" "y" "REDIRECT"
-          add_config "CONFIG_IP_NF_MANGLE" "y" "Mangle table"
-          add_config "CONFIG_IP_NF_RAW" "y" "Raw table"
-          add_config "CONFIG_IP6_NF_IPTABLES" "y" "ip6tables"
-          add_config "CONFIG_IP6_NF_FILTER" "y" "ip6tables filter"
-          add_config "CONFIG_IP6_NF_NAT" "y" "ip6tables NAT"
-          add_config "CONFIG_IP6_NF_TARGET_MASQUERADE" "y" "ip6 MASQUERADE"
-          add_config "CONFIG_NETFILTER_XT_TARGET_LOG" "y" "LOG target"
-          add_config "CONFIG_NETFILTER_XT_TARGET_NFLOG" "y" "NFLOG target"
-          add_config "CONFIG_NETFILTER_XT_TARGET_TPROXY" "y" "TPROXY target"
-          add_config "CONFIG_NETFILTER_XT_TARGET_REDIRECT" "y" "REDIRECT target"
-          add_config "CONFIG_NETFILTER_XT_TARGET_TEE" "y" "TEE target"
-          add_config "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE" "y" "addrtype match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_CONNTRACK" "y" "conntrack match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_HASHLIMIT" "y" "hashlimit match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_IPRANGE" "y" "iprange match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_LENGTH" "y" "length match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_LIMIT" "y" "limit match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_MAC" "y" "mac match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_MARK" "y" "mark match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_MULTIPORT" "y" "multiport match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_OWNER" "y" "owner match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_STATE" "y" "state match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_STRING" "y" "string match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_U32" "y" "u32 match"
+          add_config "CONFIG_NETFILTER=y" "Netfilter"
+          add_config "CONFIG_NETFILTER_ADVANCED=y" "Netfilter advanced"
+          add_config "CONFIG_NF_CONNTRACK=y" "Connection tracking"
+          add_config "CONFIG_NF_NAT=y" "NAT"
+          add_config "CONFIG_NF_TABLES=y" "nftables"
+          add_config "CONFIG_IP_NF_IPTABLES=y" "iptables"
+          add_config "CONFIG_IP_NF_FILTER=y" "iptables filter"
+          add_config "CONFIG_IP_NF_NAT=y" "iptables NAT"
+          add_config "CONFIG_IP_NF_TARGET_MASQUERADE=y" "MASQUERADE"
+          add_config "CONFIG_IP_NF_TARGET_REDIRECT=y" "REDIRECT"
+          add_config "CONFIG_IP_NF_MANGLE=y" "Mangle table"
+          add_config "CONFIG_IP_NF_RAW=y" "Raw table"
+          add_config "CONFIG_IP6_NF_IPTABLES=y" "ip6tables"
+          add_config "CONFIG_IP6_NF_FILTER=y" "ip6tables filter"
+          add_config "CONFIG_IP6_NF_NAT=y" "ip6tables NAT"
+          add_config "CONFIG_IP6_NF_TARGET_MASQUERADE=y" "ip6 MASQUERADE"
+          add_config "CONFIG_NETFILTER_XT_TARGET_LOG=y" "LOG target"
+          add_config "CONFIG_NETFILTER_XT_TARGET_NFLOG=y" "NFLOG target"
+          add_config "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" "TPROXY target"
+          add_config "CONFIG_NETFILTER_XT_TARGET_REDIRECT=y" "REDIRECT target"
+          add_config "CONFIG_NETFILTER_XT_TARGET_TEE=y" "TEE target"
+          add_config "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y" "addrtype match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y" "conntrack match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_HASHLIMIT=y" "hashlimit match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_IPRANGE=y" "iprange match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_LENGTH=y" "length match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_LIMIT=y" "limit match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_MAC=y" "mac match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_MARK=y" "mark match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_MULTIPORT=y" "multiport match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_OWNER=y" "owner match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_STATE=y" "state match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_STRING=y" "string match"
+          add_config "CONFIG_NETFILTER_XT_MATCH_U32=y" "u32 match"
           
           # Namespaces (NO USER_NS - causes bootloop)
-          add_config "CONFIG_NAMESPACES" "y" "Namespaces"
-          add_config "CONFIG_NET_NS" "y" "Network namespaces"
-          add_config "CONFIG_PID_NS" "y" "PID namespaces"
-          add_config "CONFIG_IPC_NS" "y" "IPC namespaces"
-          add_config "CONFIG_UTS_NS" "y" "UTS namespaces"
-          add_config "CONFIG_CGROUPS" "y" "Control groups"
+          add_config "CONFIG_NAMESPACES=y" "Namespaces"
+          add_config "CONFIG_NET_NS=y" "Network namespaces"
+          add_config "CONFIG_PID_NS=y" "PID namespaces"
+          add_config "CONFIG_IPC_NS=y" "IPC namespaces"
+          add_config "CONFIG_UTS_NS=y" "UTS namespaces"
+          add_config "CONFIG_CGROUPS=y" "Control groups"
           
           # Bluetooth
-          add_config "CONFIG_BT" "y" "Bluetooth"
-          add_config "CONFIG_BT_BREDR" "y" "Bluetooth BR/EDR"
-          add_config "CONFIG_BT_LE" "y" "Bluetooth LE"
-          add_config "CONFIG_BT_RFCOMM" "y" "RFCOMM"
-          add_config "CONFIG_BT_RFCOMM_TTY" "y" "RFCOMM TTY"
-          add_config "CONFIG_BT_BNEP" "y" "BNEP"
-          add_config "CONFIG_BT_HIDP" "y" "HIDP"
-          add_config "CONFIG_BT_HCIBTUSB" "y" "HCI USB"
-          add_config "CONFIG_BT_HCIUART" "y" "HCI UART"
+          add_config "CONFIG_BT=y" "Bluetooth"
+          add_config "CONFIG_BT_BREDR=y" "Bluetooth BR/EDR"
+          add_config "CONFIG_BT_LE=y" "Bluetooth LE"
+          add_config "CONFIG_BT_RFCOMM=y" "RFCOMM"
+          add_config "CONFIG_BT_RFCOMM_TTY=y" "RFCOMM TTY"
+          add_config "CONFIG_BT_BNEP=y" "BNEP"
+          add_config "CONFIG_BT_HIDP=y" "HIDP"
+          add_config "CONFIG_BT_HCIBTUSB=y" "HCI USB"
+          add_config "CONFIG_BT_HCIUART=y" "HCI UART"
           
           # Input/HID
-          add_config "CONFIG_INPUT" "y" "Input"
-          add_config "CONFIG_INPUT_EVDEV" "y" "Event device"
-          add_config "CONFIG_INPUT_UINPUT" "y" "User input"
-          add_config "CONFIG_INPUT_MISC" "y" "Input misc"
-          add_config "CONFIG_HID" "y" "HID"
-          add_config "CONFIG_HIDRAW" "y" "HID raw"
-          add_config "CONFIG_UHID" "y" "User HID"
-          add_config "CONFIG_USB_HID" "y" "USB HID"
+          add_config "CONFIG_INPUT=y" "Input"
+          add_config "CONFIG_INPUT_EVDEV=y" "Event device"
+          add_config "CONFIG_INPUT_UINPUT=y" "User input"
+          add_config "CONFIG_INPUT_MISC=y" "Input misc"
+          add_config "CONFIG_HID=y" "HID"
+          add_config "CONFIG_HIDRAW=y" "HID raw"
+          add_config "CONFIG_UHID=y" "User HID"
+          add_config "CONFIG_USB_HID=y" "USB HID"
           
           # Networking
-          add_config "CONFIG_NET" "y" "Networking"
-          add_config "CONFIG_PACKET" "y" "Packet socket"
-          add_config "CONFIG_UNIX" "y" "Unix sockets"
-          add_config "CONFIG_INET" "y" "TCP/IP"
-          add_config "CONFIG_IP_MULTICAST" "y" "IP multicast"
-          add_config "CONFIG_IP_ADVANCED_ROUTER" "y" "Advanced router"
-          add_config "CONFIG_IP_MULTIPLE_TABLES" "y" "Multiple routing tables"
-          add_config "CONFIG_NET_IPGRE" "y" "GRE tunnels"
-          add_config "CONFIG_SYN_COOKIES" "y" "SYN cookies"
-          add_config "CONFIG_TUN" "y" "TUN/TAP"
-          add_config "CONFIG_VETH" "y" "Virtual ethernet"
-          add_config "CONFIG_BRIDGE" "y" "Ethernet bridge"
-          add_config "CONFIG_VLAN_8021Q" "y" "802.1Q VLAN"
-          add_config "CONFIG_MACVLAN" "y" "MAC VLAN"
-          add_config "CONFIG_IPVLAN" "y" "IP VLAN"
-          add_config "CONFIG_DUMMY" "y" "Dummy interface"
+          add_config "CONFIG_NET=y" "Networking"
+          add_config "CONFIG_PACKET=y" "Packet socket"
+          add_config "CONFIG_UNIX=y" "Unix sockets"
+          add_config "CONFIG_INET=y" "TCP/IP"
+          add_config "CONFIG_IP_MULTICAST=y" "IP multicast"
+          add_config "CONFIG_IP_ADVANCED_ROUTER=y" "Advanced router"
+          add_config "CONFIG_IP_MULTIPLE_TABLES=y" "Multiple routing tables"
+          add_config "CONFIG_NET_IPGRE=y" "GRE tunnels"
+          add_config "CONFIG_SYN_COOKIES=y" "SYN cookies"
+          add_config "CONFIG_TUN=y" "TUN/TAP"
+          add_config "CONFIG_VETH=y" "Virtual ethernet"
+          add_config "CONFIG_BRIDGE=y" "Ethernet bridge"
+          add_config "CONFIG_VLAN_8021Q=y" "802.1Q VLAN"
+          add_config "CONFIG_MACVLAN=y" "MAC VLAN"
+          add_config "CONFIG_IPVLAN=y" "IP VLAN"
+          add_config "CONFIG_DUMMY=y" "Dummy interface"
           
           # PPP/VPN
-          add_config "CONFIG_PPP" "y" "PPP"
-          add_config "CONFIG_PPP_BSDCOMP" "y" "PPP BSD comp"
-          add_config "CONFIG_PPP_DEFLATE" "y" "PPP deflate"
-          add_config "CONFIG_PPP_MPPE" "y" "PPP MPPE"
-          add_config "CONFIG_PPPOE" "y" "PPPoE"
-          add_config "CONFIG_PPTP" "y" "PPTP"
-          add_config "CONFIG_PPPOL2TP" "y" "L2TP"
-          add_config "CONFIG_PPP_ASYNC" "y" "PPP async"
-          add_config "CONFIG_PPP_SYNC_TTY" "y" "PPP sync TTY"
+          add_config "CONFIG_PPP=y" "PPP"
+          add_config "CONFIG_PPP_BSDCOMP=y" "PPP BSD comp"
+          add_config "CONFIG_PPP_DEFLATE=y" "PPP deflate"
+          add_config "CONFIG_PPP_MPPE=y" "PPP MPPE"
+          add_config "CONFIG_PPPOE=y" "PPPoE"
+          add_config "CONFIG_PPTP=y" "PPTP"
+          add_config "CONFIG_PPPOL2TP=y" "L2TP"
+          add_config "CONFIG_PPP_ASYNC=y" "PPP async"
+          add_config "CONFIG_PPP_SYNC_TTY=y" "PPP sync TTY"
           
           # Crypto
-          add_config "CONFIG_CRYPTO" "y" "Crypto"
-          add_config "CONFIG_CRYPTO_USER" "y" "Crypto user"
-          add_config "CONFIG_CRYPTO_USER_API" "y" "Crypto user API"
-          add_config "CONFIG_CRYPTO_USER_API_HASH" "y" "Crypto hash API"
-          add_config "CONFIG_CRYPTO_USER_API_SKCIPHER" "y" "Crypto skcipher API"
-          add_config "CONFIG_CRYPTO_AES" "y" "AES"
-          add_config "CONFIG_CRYPTO_SHA256" "y" "SHA256"
-          add_config "CONFIG_CRYPTO_SHA512" "y" "SHA512"
-          add_config "CONFIG_CRYPTO_GCM" "y" "GCM"
-          add_config "CONFIG_CRYPTO_CBC" "y" "CBC"
-          add_config "CONFIG_CRYPTO_HMAC" "y" "HMAC"
+          add_config "CONFIG_CRYPTO=y" "Crypto"
+          add_config "CONFIG_CRYPTO_USER=y" "Crypto user"
+          add_config "CONFIG_CRYPTO_USER_API=y" "Crypto user API"
+          add_config "CONFIG_CRYPTO_USER_API_HASH=y" "Crypto hash API"
+          add_config "CONFIG_CRYPTO_USER_API_SKCIPHER=y" "Crypto skcipher API"
+          add_config "CONFIG_CRYPTO_AES=y" "AES"
+          add_config "CONFIG_CRYPTO_SHA256=y" "SHA256"
+          add_config "CONFIG_CRYPTO_SHA512=y" "SHA512"
+          add_config "CONFIG_CRYPTO_GCM=y" "GCM"
+          add_config "CONFIG_CRYPTO_CBC=y" "CBC"
+          add_config "CONFIG_CRYPTO_HMAC=y" "HMAC"
           
           # Filesystems
-          add_config "CONFIG_EXT4_FS" "y" "ext4"
-          add_config "CONFIG_EXT4_FS_POSIX_ACL" "y" "ext4 ACL"
-          add_config "CONFIG_EXT4_FS_SECURITY" "y" "ext4 security"
-          add_config "CONFIG_FUSE_FS" "y" "FUSE"
-          add_config "CONFIG_OVERLAY_FS" "y" "OverlayFS"
-          add_config "CONFIG_SQUASHFS" "y" "SquashFS"
-          add_config "CONFIG_SQUASHFS_XATTR" "y" "SquashFS xattr"
-          add_config "CONFIG_SQUASHFS_ZLIB" "y" "SquashFS zlib"
-          add_config "CONFIG_SQUASHFS_LZ4" "y" "SquashFS lz4"
-          add_config "CONFIG_SQUASHFS_LZO" "y" "SquashFS lzo"
-          add_config "CONFIG_SQUASHFS_XZ" "y" "SquashFS xz"
-          add_config "CONFIG_SQUASHFS_ZSTD" "y" "SquashFS zstd"
-          add_config "CONFIG_TMPFS" "y" "tmpfs"
-          add_config "CONFIG_TMPFS_POSIX_ACL" "y" "tmpfs ACL"
-          add_config "CONFIG_TMPFS_XATTR" "y" "tmpfs xattr"
-          add_config "CONFIG_CIFS" "y" "CIFS"
-          add_config "CONFIG_NFS_FS" "y" "NFS"
+          add_config "CONFIG_EXT4_FS=y" "ext4"
+          add_config "CONFIG_EXT4_FS_POSIX_ACL=y" "ext4 ACL"
+          add_config "CONFIG_EXT4_FS_SECURITY=y" "ext4 security"
+          add_config "CONFIG_FUSE_FS=y" "FUSE"
+          add_config "CONFIG_OVERLAY_FS=y" "OverlayFS"
+          add_config "CONFIG_SQUASHFS=y" "SquashFS"
+          add_config "CONFIG_SQUASHFS_XATTR=y" "SquashFS xattr"
+          add_config "CONFIG_SQUASHFS_ZLIB=y" "SquashFS zlib"
+          add_config "CONFIG_SQUASHFS_LZ4=y" "SquashFS lz4"
+          add_config "CONFIG_SQUASHFS_LZO=y" "SquashFS lzo"
+          add_config "CONFIG_SQUASHFS_XZ=y" "SquashFS xz"
+          add_config "CONFIG_SQUASHFS_ZSTD=y" "SquashFS zstd"
+          add_config "CONFIG_TMPFS=y" "tmpfs"
+          add_config "CONFIG_TMPFS_POSIX_ACL=y" "tmpfs ACL"
+          add_config "CONFIG_TMPFS_XATTR=y" "tmpfs xattr"
+          add_config "CONFIG_CIFS=y" "CIFS"
+          add_config "CONFIG_NFS_FS=y" "NFS"
           
           # Firmware loading
-          add_config "CONFIG_FW_LOADER" "y" "Firmware loader"
-          add_config "CONFIG_FW_LOADER_USER_HELPER" "y" "Firmware user helper"
-          add_config "CONFIG_FW_LOADER_USER_HELPER_FALLBACK" "y" "Firmware fallback"
+          add_config "CONFIG_FW_LOADER=y" "Firmware loader"
+          add_config "CONFIG_FW_LOADER_USER_HELPER=y" "Firmware user helper"
+          add_config "CONFIG_FW_LOADER_USER_HELPER_FALLBACK=y" "Firmware fallback"
           
           # Misc
-          add_config "CONFIG_SECCOMP" "y" "Seccomp"
-          add_config "CONFIG_BINFMT_MISC" "y" "Misc binaries"
-          add_config "CONFIG_SYSVIPC" "y" "System V IPC"
-          add_config "CONFIG_POSIX_MQUEUE" "y" "POSIX mqueue"
-          add_config "CONFIG_MAGIC_SYSRQ" "y" "Magic SysRq"
-          add_config "CONFIG_DEBUG_FS" "y" "DebugFS"
+          add_config "CONFIG_SECCOMP=y" "Seccomp"
+          add_config "CONFIG_BINFMT_MISC=y" "Misc binaries"
+          add_config "CONFIG_SYSVIPC=y" "System V IPC"
+          add_config "CONFIG_POSIX_MQUEUE=y" "POSIX mqueue"
+          add_config "CONFIG_MAGIC_SYSRQ=y" "Magic SysRq"
+          add_config "CONFIG_DEBUG_FS=y" "DebugFS"
           
           echo ""
-          echo "=============================================="
-          echo "  Summary"
-          echo "=============================================="
-          echo "Added: $ADDED"
-          echo "Skipped (already correct): $SKIPPED"
-          echo "Conflicts avoided: $CONFLICT"
-          echo "=============================================="
+          echo "NetHunter configs added!"
 
       # ==========================================
-      # WIFI DRIVERS (MAINLINE + OUT-OF-TREE)
+      # WIFI DRIVERS
       # ==========================================
       - name: Add Wi-Fi Driver Configs (Mainline)
         if: ${{ github.event.inputs.WIFI_DRIVERS == 'true' }}
@@ -664,25 +644,17 @@ jobs:
           CONFIG_FILE=./arch/arm64/configs/gki_defconfig
           
           echo "" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
           echo "# WIFI DRIVERS (MAINLINE)" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          
-          # Atheros (AR9271 - BEST for injection)
           echo "CONFIG_ATH_COMMON=y" >> "$CONFIG_FILE"
           echo "CONFIG_ATH9K=y" >> "$CONFIG_FILE"
           echo "CONFIG_ATH9K_HTC=y" >> "$CONFIG_FILE"
           echo "CONFIG_ATH9K_HW=y" >> "$CONFIG_FILE"
           echo "CONFIG_ATH9K_COMMON=y" >> "$CONFIG_FILE"
-          
-          # Ralink (RT3070/RT5370)
           echo "CONFIG_RT2X00=y" >> "$CONFIG_FILE"
           echo "CONFIG_RT2800USB=y" >> "$CONFIG_FILE"
           echo "CONFIG_RT2800_LIB=y" >> "$CONFIG_FILE"
           echo "CONFIG_RT2X00_LIB_USB=y" >> "$CONFIG_FILE"
           echo "CONFIG_RT2X00_LIB=y" >> "$CONFIG_FILE"
-          
-          # MediaTek
           echo "CONFIG_MT7601U=y" >> "$CONFIG_FILE"
           echo "CONFIG_MT76_CORE=y" >> "$CONFIG_FILE"
           echo "CONFIG_MT76_USB=y" >> "$CONFIG_FILE"
@@ -690,17 +662,11 @@ jobs:
           echo "CONFIG_MT76x0U=y" >> "$CONFIG_FILE"
           echo "CONFIG_MT76x2_COMMON=y" >> "$CONFIG_FILE"
           echo "CONFIG_MT76x2U=y" >> "$CONFIG_FILE"
-          
-          # Realtek (mainline - limited injection)
           echo "CONFIG_RTL8XXXU=y" >> "$CONFIG_FILE"
           echo "CONFIG_RTL8192CU=y" >> "$CONFIG_FILE"
           echo "CONFIG_RTLWIFI=y" >> "$CONFIG_FILE"
           echo "CONFIG_RTLWIFI_USB=y" >> "$CONFIG_FILE"
-          
-          # Zydas
           echo "CONFIG_ZD1211RW=y" >> "$CONFIG_FILE"
-          
-          echo "Mainline Wi-Fi drivers added."
 
       - name: Clone External Wi-Fi Drivers (Out-of-tree)
         if: ${{ github.event.inputs.WIFI_DRIVERS == 'true' }}
@@ -721,42 +687,60 @@ jobs:
           
           echo "External drivers cloned."
 
+      - name: Fix External Wi-Fi Driver Kconfig Syntax
+        if: ${{ github.event.inputs.WIFI_DRIVERS == 'true' }}
+        run: |
+          cd kernel_workspace/kernel-5.10/drivers/net/wireless
+          
+          echo "Fixing Kconfig syntax..."
+          
+          # Fix ---help--- to help (deprecated in newer kernels)
+          find . -name "Kconfig" -type f -exec sed -i 's/---help---/help/g' {} \;
+          
+          # Fix trailing whitespace
+          find . -name "Kconfig" -type f -exec sed -i 's/[[:space:]]*$//' {} \;
+          
+          # Ensure newline at end of file
+          find . -name "Kconfig" -type f -exec sh -c 'tail -c1 "$1" | read -r _ || echo >> "$1"' _ {} \;
+          
+          echo "Kconfig syntax fixed."
+
       - name: Integrate External Wi-Fi Drivers
         if: ${{ github.event.inputs.WIFI_DRIVERS == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10/drivers/net/wireless
           
           # Update Kconfig
-          if ! grep -q "rtl8812au" Kconfig; then
+          if ! grep -q "rtl8812au" Kconfig 2>/dev/null; then
             echo 'source "drivers/net/wireless/rtl8812au/Kconfig"' >> Kconfig
           fi
-          if ! grep -q "rtl8814au" Kconfig; then
+          if ! grep -q "rtl8814au" Kconfig 2>/dev/null; then
             echo 'source "drivers/net/wireless/rtl8814au/Kconfig"' >> Kconfig
           fi
-          if ! grep -q "rtl8188eus" Kconfig; then
+          if ! grep -q "rtl8188eus" Kconfig 2>/dev/null; then
             echo 'source "drivers/net/wireless/rtl8188eus/Kconfig"' >> Kconfig
           fi
-          if ! grep -q "rtl88x2bu" Kconfig; then
+          if ! grep -q "rtl88x2bu" Kconfig 2>/dev/null; then
             echo 'source "drivers/net/wireless/rtl88x2bu/Kconfig"' >> Kconfig
           fi
           
           # Update Makefile
-          if ! grep -q "rtl8812au" Makefile; then
+          if ! grep -q "rtl8812au" Makefile 2>/dev/null; then
             echo 'obj-$(CONFIG_88XXAU) += rtl8812au/' >> Makefile
           fi
-          if ! grep -q "rtl8814au" Makefile; then
+          if ! grep -q "rtl8814au" Makefile 2>/dev/null; then
             echo 'obj-$(CONFIG_RTL8814AU) += rtl8814au/' >> Makefile
           fi
-          if ! grep -q "rtl8188eus" Makefile; then
+          if ! grep -q "rtl8188eus" Makefile 2>/dev/null; then
             echo 'obj-$(CONFIG_RTL8188EUS) += rtl8188eus/' >> Makefile
           fi
-          if ! grep -q "rtl88x2bu" Makefile; then
+          if ! grep -q "rtl88x2bu" Makefile 2>/dev/null; then
             echo 'obj-$(CONFIG_RTL8822BU) += rtl88x2bu/' >> Makefile
           fi
           
           echo "External drivers integrated."
           
-          # Add configs - need to go up 3 levels from drivers/net/wireless
+          # Add configs
           CONFIG_FILE=../../../arch/arm64/configs/gki_defconfig
           echo "" >> "$CONFIG_FILE"
           echo "# OUT-OF-TREE WIFI DRIVERS" >> "$CONFIG_FILE"
