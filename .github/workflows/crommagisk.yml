@@ -1,4 +1,4 @@
-name: Build OnePlus Nord 3 AOSP - Zabixii (NetHunter)
+name: Build OnePlus Nord 3 AOSP - Zabixii⚡ (NetHunter)
 
 on:
   workflow_dispatch:
@@ -57,11 +57,6 @@ on:
         description: "Enable NetHunter kernel support?"
         required: true
         default: true
-      WIFI_DRIVERS:
-        type: boolean
-        description: "Include external Wi-Fi drivers? (RTL8812AU, ATH9K, etc.)"
-        required: true
-        default: true
 
 jobs:
   notify_start:
@@ -74,7 +69,7 @@ jobs:
 
   build:
     needs: notify_start
-    name: ${{ github.event.inputs.FAST_BUILD == 'true' && '[FAST]' || '' }}${{ github.event.inputs.KSU == 'true' && ' [KSU]' || ' [MAGISK]' }}${{ github.event.inputs.NETHUNTER == 'true' && ' [NH]' || '' }}${{ github.event.inputs.WIFI_DRIVERS == 'true' && ' [WIFI]' || '' }} ${{ github.event.inputs.SUFFIX }}
+    name: ${{ github.event.inputs.FAST_BUILD == 'true' && ' [FAST]' || '' }}${{ github.event.inputs.KSU == 'true' && ' [KSU]' || ' [MAGISK]' }}${{ github.event.inputs.NETHUNTER == 'true' && ' [NH]' || '' }} ${{ github.event.inputs.SUFFIX }}
     runs-on: ubuntu-latest
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
@@ -184,7 +179,6 @@ jobs:
           echo "SUFFIX: ${{ github.event.inputs.SUFFIX }}"
           echo "KSU: ${{ github.event.inputs.KSU }}"
           echo "NETHUNTER: ${{ github.event.inputs.NETHUNTER }}"
-          echo "WIFI_DRIVERS: ${{ github.event.inputs.WIFI_DRIVERS }}"
           echo "FAST_BUILD: ${{ github.event.inputs.FAST_BUILD }}"
           if [ "${{ github.event.inputs.KSU }}" = "true" ]; then
             echo "VFS: ${{ github.event.inputs.VFS }}"
@@ -265,11 +259,22 @@ jobs:
           rm -f Makefile
           cat > Makefile << 'EOF'
           obj-$(CONFIG_OPLUS_FINGERPRINT_COMMON) += oplus_fp_common/
+
+          ### Capacitive fingerprint sensor
+          #obj-$(CONFIG_OPLUS_FINGERPRINT_FPC) += fpc/
+
+          #obj-$(CONFIG_OPLUS_FINGERPRINT_EGIS) += egis/
+
+          ### Optical fingerprint sensor
           ifneq ($(CONFIG_OPLUS_FINGERPRINT_GOODIX)_$(CONFIG_OPLUS_FINGERPRINT_GOODIX_OPTICAL), _)
           obj-y += goodix_optical_fp/
           endif
-          obj-$(CONFIG_OPLUS_FINGERPRINT_JIIOV_OPTICAL) += anc_driver/
-          obj-$(CONFIG_OPLUS_FINGERPRINT_SILEAD_CAP) += silead/
+          #obj-$(CONFIG_OPLUS_FINGERPRINT_SILEAD_OPTICAL) += silead_optical_fp/
+          #obj-$(CONFIG_OPLUS_FINGERPRINT_EGIS_OPTICAL)   += egis_optical_fp/
+          obj-$(CONFIG_OPLUS_FINGERPRINT_JIIOV_OPTICAL)  += anc_driver/
+          obj-$(CONFIG_OPLUS_FINGERPRINT_SILEAD_CAP)  += silead/
+
+          ### FEATURE MACRO
           ccflags-$(CONFIG_OPLUS_FINGERPRINT_NAVIGATION_ENABLE) += -DFP_NAVIGATION_ENABLE
           EOF
 
@@ -325,7 +330,7 @@ jobs:
           KSU_VERSION=$(expr $(git rev-list --count main 2>/dev/null || echo 13000) + 10700)
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
 
-      - name: Apply SUSFS Patches
+      - name: Apply Patches SukiSU Ultra
         if: ${{ github.event.inputs.KSU == 'true' }}
         run: |
           cd kernel_workspace
@@ -410,332 +415,95 @@ jobs:
           cd kernel_workspace/kernel-5.10
           CONFIG_FILE=./arch/arm64/configs/gki_defconfig
           
-          echo "=============================================="
-          echo "  Adding NetHunter Kernel Configs"
-          echo "=============================================="
-          
-          add_config() {
-            local config="$1"
-            local desc="$2"
-            local name="${config%%=*}"
-            
-            if grep -q "^${name}=" "$CONFIG_FILE"; then
-              echo "SKIP: $name already set"
-            elif grep -q "^# ${name} is not set" "$CONFIG_FILE"; then
-              sed -i "s/^# ${name} is not set/${config}/" "$CONFIG_FILE"
-              echo "ENABLED: $name ($desc)"
-            else
-              echo "$config" >> "$CONFIG_FILE"
-              echo "ADDED: $name ($desc)"
-            fi
-          }
-          
           echo "" >> "$CONFIG_FILE"
           echo "# ===========================================" >> "$CONFIG_FILE"
           echo "# NETHUNTER SUPPORT" >> "$CONFIG_FILE"
           echo "# ===========================================" >> "$CONFIG_FILE"
           
-          # IKCONFIG
-          add_config "CONFIG_IKCONFIG=y" "Kernel config export"
-          add_config "CONFIG_IKCONFIG_PROC=y" "Kernel config in /proc"
+          # IKCONFIG - for /proc/config.gz verification
+          echo "CONFIG_IKCONFIG=y" >> "$CONFIG_FILE"
+          echo "CONFIG_IKCONFIG_PROC=y" >> "$CONFIG_FILE"
           
-          # USB Gadget/HID
-          add_config "CONFIG_USB_GADGET=y" "USB Gadget framework"
-          add_config "CONFIG_USB_CONFIGFS=y" "USB ConfigFS"
-          add_config "CONFIG_USB_CONFIGFS_F_HID=y" "HID function"
-          add_config "CONFIG_USB_F_HID=y" "USB HID driver"
-          add_config "CONFIG_USB_G_HID=y" "HID gadget"
-          add_config "CONFIG_USB_CONFIGFS_SERIAL=y" "USB serial"
-          add_config "CONFIG_USB_CONFIGFS_ACM=y" "USB ACM"
-          add_config "CONFIG_USB_CONFIGFS_RNDIS=y" "USB RNDIS"
-          add_config "CONFIG_USB_CONFIGFS_ECM=y" "USB ECM"
-          add_config "CONFIG_USB_CONFIGFS_NCM=y" "USB NCM"
-          add_config "CONFIG_USB_CONFIGFS_MASS_STORAGE=y" "USB mass storage"
+          # USB Gadget/HID - BadUSB attacks
+          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_F_HID=y" >> "$CONFIG_FILE"
           
-          # USB Host/OTG
-          add_config "CONFIG_USB=y" "USB support"
-          add_config "CONFIG_USB_OTG=y" "USB OTG"
-          add_config "CONFIG_USB_XHCI_HCD=y" "xHCI"
-          add_config "CONFIG_USB_EHCI_HCD=y" "EHCI"
-          add_config "CONFIG_USB_ACM=y" "USB ACM"
-          add_config "CONFIG_USB_STORAGE=y" "USB storage"
-          add_config "CONFIG_USB_UAS=y" "USB UAS"
+          # USB Serial adapters
+          echo "CONFIG_USB_SERIAL_CH341=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_SERIAL_CP210X=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_SERIAL_FTDI_SIO=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_SERIAL_PL2303=y" >> "$CONFIG_FILE"
           
-          # USB Serial
-          add_config "CONFIG_USB_SERIAL=y" "USB serial"
-          add_config "CONFIG_USB_SERIAL_GENERIC=y" "Generic USB serial"
-          add_config "CONFIG_USB_SERIAL_CH341=y" "CH341 serial"
-          add_config "CONFIG_USB_SERIAL_CP210X=y" "CP210x serial"
-          add_config "CONFIG_USB_SERIAL_FTDI_SIO=y" "FTDI serial"
-          add_config "CONFIG_USB_SERIAL_PL2303=y" "PL2303 serial"
-          add_config "CONFIG_USB_SERIAL_OPTION=y" "Option serial"
+          # Wireless framework (NO drivers)
+          echo "CONFIG_WIRELESS_EXT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_CFG80211_WEXT=y" >> "$CONFIG_FILE"
           
-          # Wireless framework
-          add_config "CONFIG_WIRELESS=y" "Wireless"
-          add_config "CONFIG_WIRELESS_EXT=y" "Wireless extensions"
-          add_config "CONFIG_WEXT_CORE=y" "WEXT core"
-          add_config "CONFIG_WEXT_PROC=y" "WEXT proc"
-          add_config "CONFIG_WEXT_PRIV=y" "WEXT priv"
-          add_config "CONFIG_CFG80211=y" "cfg80211"
-          add_config "CONFIG_CFG80211_WEXT=y" "cfg80211 WEXT"
-          add_config "CONFIG_MAC80211=y" "mac80211"
-          add_config "CONFIG_MAC80211_MESH=y" "mac80211 mesh"
-          add_config "CONFIG_RFKILL=y" "RFKILL"
-          add_config "CONFIG_RFKILL_INPUT=y" "RFKILL input"
-          
-          # Netfilter/iptables
-          add_config "CONFIG_NETFILTER=y" "Netfilter"
-          add_config "CONFIG_NETFILTER_ADVANCED=y" "Netfilter advanced"
-          add_config "CONFIG_NF_CONNTRACK=y" "Connection tracking"
-          add_config "CONFIG_NF_NAT=y" "NAT"
-          add_config "CONFIG_NF_TABLES=y" "nftables"
-          add_config "CONFIG_IP_NF_IPTABLES=y" "iptables"
-          add_config "CONFIG_IP_NF_FILTER=y" "iptables filter"
-          add_config "CONFIG_IP_NF_NAT=y" "iptables NAT"
-          add_config "CONFIG_IP_NF_TARGET_MASQUERADE=y" "MASQUERADE"
-          add_config "CONFIG_IP_NF_TARGET_REDIRECT=y" "REDIRECT"
-          add_config "CONFIG_IP_NF_MANGLE=y" "Mangle table"
-          add_config "CONFIG_IP_NF_RAW=y" "Raw table"
-          add_config "CONFIG_IP6_NF_IPTABLES=y" "ip6tables"
-          add_config "CONFIG_IP6_NF_FILTER=y" "ip6tables filter"
-          add_config "CONFIG_IP6_NF_NAT=y" "ip6tables NAT"
-          add_config "CONFIG_IP6_NF_TARGET_MASQUERADE=y" "ip6 MASQUERADE"
-          add_config "CONFIG_NETFILTER_XT_TARGET_LOG=y" "LOG target"
-          add_config "CONFIG_NETFILTER_XT_TARGET_NFLOG=y" "NFLOG target"
-          add_config "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" "TPROXY target"
-          add_config "CONFIG_NETFILTER_XT_TARGET_REDIRECT=y" "REDIRECT target"
-          add_config "CONFIG_NETFILTER_XT_TARGET_TEE=y" "TEE target"
-          add_config "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y" "addrtype match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y" "conntrack match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_HASHLIMIT=y" "hashlimit match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_IPRANGE=y" "iprange match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_LENGTH=y" "length match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_LIMIT=y" "limit match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_MAC=y" "mac match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_MARK=y" "mark match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_MULTIPORT=y" "multiport match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_OWNER=y" "owner match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_STATE=y" "state match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_STRING=y" "string match"
-          add_config "CONFIG_NETFILTER_XT_MATCH_U32=y" "u32 match"
-          
-          # Namespaces (NO USER_NS - causes bootloop)
-          add_config "CONFIG_NAMESPACES=y" "Namespaces"
-          add_config "CONFIG_NET_NS=y" "Network namespaces"
-          add_config "CONFIG_PID_NS=y" "PID namespaces"
-          add_config "CONFIG_IPC_NS=y" "IPC namespaces"
-          add_config "CONFIG_UTS_NS=y" "UTS namespaces"
-          add_config "CONFIG_CGROUPS=y" "Control groups"
-          
-          # Bluetooth
-          add_config "CONFIG_BT=y" "Bluetooth"
-          add_config "CONFIG_BT_BREDR=y" "Bluetooth BR/EDR"
-          add_config "CONFIG_BT_LE=y" "Bluetooth LE"
-          add_config "CONFIG_BT_RFCOMM=y" "RFCOMM"
-          add_config "CONFIG_BT_RFCOMM_TTY=y" "RFCOMM TTY"
-          add_config "CONFIG_BT_BNEP=y" "BNEP"
-          add_config "CONFIG_BT_HIDP=y" "HIDP"
-          add_config "CONFIG_BT_HCIBTUSB=y" "HCI USB"
-          add_config "CONFIG_BT_HCIUART=y" "HCI UART"
-          
-          # Input/HID
-          add_config "CONFIG_INPUT=y" "Input"
-          add_config "CONFIG_INPUT_EVDEV=y" "Event device"
-          add_config "CONFIG_INPUT_UINPUT=y" "User input"
-          add_config "CONFIG_INPUT_MISC=y" "Input misc"
-          add_config "CONFIG_HID=y" "HID"
-          add_config "CONFIG_HIDRAW=y" "HID raw"
-          add_config "CONFIG_UHID=y" "User HID"
-          add_config "CONFIG_USB_HID=y" "USB HID"
-          
-          # Networking
-          add_config "CONFIG_NET=y" "Networking"
-          add_config "CONFIG_PACKET=y" "Packet socket"
-          add_config "CONFIG_UNIX=y" "Unix sockets"
-          add_config "CONFIG_INET=y" "TCP/IP"
-          add_config "CONFIG_IP_MULTICAST=y" "IP multicast"
-          add_config "CONFIG_IP_ADVANCED_ROUTER=y" "Advanced router"
-          add_config "CONFIG_IP_MULTIPLE_TABLES=y" "Multiple routing tables"
-          add_config "CONFIG_NET_IPGRE=y" "GRE tunnels"
-          add_config "CONFIG_SYN_COOKIES=y" "SYN cookies"
-          add_config "CONFIG_TUN=y" "TUN/TAP"
-          add_config "CONFIG_VETH=y" "Virtual ethernet"
-          add_config "CONFIG_BRIDGE=y" "Ethernet bridge"
-          add_config "CONFIG_VLAN_8021Q=y" "802.1Q VLAN"
-          add_config "CONFIG_MACVLAN=y" "MAC VLAN"
-          add_config "CONFIG_IPVLAN=y" "IP VLAN"
-          add_config "CONFIG_DUMMY=y" "Dummy interface"
-          
-          # PPP/VPN
-          add_config "CONFIG_PPP=y" "PPP"
-          add_config "CONFIG_PPP_BSDCOMP=y" "PPP BSD comp"
-          add_config "CONFIG_PPP_DEFLATE=y" "PPP deflate"
-          add_config "CONFIG_PPP_MPPE=y" "PPP MPPE"
-          add_config "CONFIG_PPPOE=y" "PPPoE"
-          add_config "CONFIG_PPTP=y" "PPTP"
-          add_config "CONFIG_PPPOL2TP=y" "L2TP"
-          add_config "CONFIG_PPP_ASYNC=y" "PPP async"
-          add_config "CONFIG_PPP_SYNC_TTY=y" "PPP sync TTY"
-          
-          # Crypto
-          add_config "CONFIG_CRYPTO=y" "Crypto"
-          add_config "CONFIG_CRYPTO_USER=y" "Crypto user"
-          add_config "CONFIG_CRYPTO_USER_API=y" "Crypto user API"
-          add_config "CONFIG_CRYPTO_USER_API_HASH=y" "Crypto hash API"
-          add_config "CONFIG_CRYPTO_USER_API_SKCIPHER=y" "Crypto skcipher API"
-          add_config "CONFIG_CRYPTO_AES=y" "AES"
-          add_config "CONFIG_CRYPTO_SHA256=y" "SHA256"
-          add_config "CONFIG_CRYPTO_SHA512=y" "SHA512"
-          add_config "CONFIG_CRYPTO_GCM=y" "GCM"
-          add_config "CONFIG_CRYPTO_CBC=y" "CBC"
-          add_config "CONFIG_CRYPTO_HMAC=y" "HMAC"
-          
-          # Filesystems
-          add_config "CONFIG_EXT4_FS=y" "ext4"
-          add_config "CONFIG_EXT4_FS_POSIX_ACL=y" "ext4 ACL"
-          add_config "CONFIG_EXT4_FS_SECURITY=y" "ext4 security"
-          add_config "CONFIG_FUSE_FS=y" "FUSE"
-          add_config "CONFIG_OVERLAY_FS=y" "OverlayFS"
-          add_config "CONFIG_SQUASHFS=y" "SquashFS"
-          add_config "CONFIG_SQUASHFS_XATTR=y" "SquashFS xattr"
-          add_config "CONFIG_SQUASHFS_ZLIB=y" "SquashFS zlib"
-          add_config "CONFIG_SQUASHFS_LZ4=y" "SquashFS lz4"
-          add_config "CONFIG_SQUASHFS_LZO=y" "SquashFS lzo"
-          add_config "CONFIG_SQUASHFS_XZ=y" "SquashFS xz"
-          add_config "CONFIG_SQUASHFS_ZSTD=y" "SquashFS zstd"
-          add_config "CONFIG_TMPFS=y" "tmpfs"
-          add_config "CONFIG_TMPFS_POSIX_ACL=y" "tmpfs ACL"
-          add_config "CONFIG_TMPFS_XATTR=y" "tmpfs xattr"
-          add_config "CONFIG_CIFS=y" "CIFS"
-          add_config "CONFIG_NFS_FS=y" "NFS"
-          
-          # Firmware loading
-          add_config "CONFIG_FW_LOADER=y" "Firmware loader"
-          add_config "CONFIG_FW_LOADER_USER_HELPER=y" "Firmware user helper"
-          add_config "CONFIG_FW_LOADER_USER_HELPER_FALLBACK=y" "Firmware fallback"
-          
-          # Misc
-          add_config "CONFIG_SECCOMP=y" "Seccomp"
-          add_config "CONFIG_BINFMT_MISC=y" "Misc binaries"
-          add_config "CONFIG_SYSVIPC=y" "System V IPC"
-          add_config "CONFIG_POSIX_MQUEUE=y" "POSIX mqueue"
-          add_config "CONFIG_MAGIC_SYSRQ=y" "Magic SysRq"
-          add_config "CONFIG_DEBUG_FS=y" "DebugFS"
-          
-          echo ""
-          echo "NetHunter configs added!"
-
-      - name: Add Wi-Fi Driver Configs (Mainline)
-        if: ${{ github.event.inputs.WIFI_DRIVERS == 'true' }}
-        run: |
-          cd kernel_workspace/kernel-5.10
-          CONFIG_FILE=./arch/arm64/configs/gki_defconfig
-          
-          echo "" >> "$CONFIG_FILE"
-          echo "# WIFI DRIVERS (MAINLINE)" >> "$CONFIG_FILE"
-          echo "CONFIG_ATH_COMMON=y" >> "$CONFIG_FILE"
-          echo "CONFIG_ATH9K=y" >> "$CONFIG_FILE"
+          # Mainline Wi-Fi drivers
           echo "CONFIG_ATH9K_HTC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_ATH9K_HW=y" >> "$CONFIG_FILE"
-          echo "CONFIG_ATH9K_COMMON=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RT2X00=y" >> "$CONFIG_FILE"
           echo "CONFIG_RT2800USB=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RT2800_LIB=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RT2X00_LIB_USB=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RT2X00_LIB=y" >> "$CONFIG_FILE"
           echo "CONFIG_MT7601U=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MT76_CORE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MT76_USB=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MT76x0_COMMON=y" >> "$CONFIG_FILE"
           echo "CONFIG_MT76x0U=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MT76x2_COMMON=y" >> "$CONFIG_FILE"
           echo "CONFIG_MT76x2U=y" >> "$CONFIG_FILE"
           echo "CONFIG_RTL8XXXU=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RTL8192CU=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RTLWIFI=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RTLWIFI_USB=y" >> "$CONFIG_FILE"
           echo "CONFIG_ZD1211RW=y" >> "$CONFIG_FILE"
-
-      - name: Clone External Wi-Fi Drivers (Out-of-tree)
-        if: ${{ github.event.inputs.WIFI_DRIVERS == 'true' }}
-        run: |
-          cd kernel_workspace/kernel-5.10/drivers/net/wireless
           
-          echo "Cloning RTL8812AU (aircrack-ng)..."
-          git clone https://github.com/aircrack-ng/rtl8812au.git --depth=1 || true
+          # Netfilter additions
+          echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_TARGET_TEE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_U32=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_STRING=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_HASHLIMIT=y" >> "$CONFIG_FILE"
           
-          echo "Cloning RTL8814AU..."
-          git clone https://github.com/aircrack-ng/rtl8814au.git --depth=1 || true
+          # Namespaces (NO USER_NS to avoid bootloop)
+          echo "CONFIG_NET_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PID_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"
           
-          echo "Cloning RTL8188EUS..."
-          git clone https://github.com/aircrack-ng/rtl8188eus.git --depth=1 || true
+          # Bluetooth
+          echo "CONFIG_BT_RFCOMM=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_RFCOMM_TTY=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_BNEP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_HIDP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_HCIBTUSB=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_HCIUART=y" >> "$CONFIG_FILE"
           
-          echo "Cloning RTL88x2BU..."
-          git clone https://github.com/morrownr/88x2bu-20210702.git rtl88x2bu --depth=1 || true
+          # Input/HID
+          echo "CONFIG_INPUT_UINPUT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_UHID=y" >> "$CONFIG_FILE"
           
-          echo "External drivers cloned."
-
-      - name: Fix External Wi-Fi Driver Kconfig Syntax
-        if: ${{ github.event.inputs.WIFI_DRIVERS == 'true' }}
-        run: |
-          cd kernel_workspace/kernel-5.10/drivers/net/wireless
+          # Networking
+          echo "CONFIG_TUN=y" >> "$CONFIG_FILE"
+          echo "CONFIG_VETH=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BRIDGE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_VLAN_8021Q=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MACVLAN=y" >> "$CONFIG_FILE"
           
-          echo "Fixing Kconfig syntax..."
+          # PPP/VPN
+          echo "CONFIG_PPP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PPP_MPPE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PPTP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PPPOE=y" >> "$CONFIG_FILE"
           
-          # Fix ---help--- to help (deprecated in newer kernels)
-          find . -name "Kconfig" -type f -exec sed -i 's/---help---/help/g' {} \;
+          # Crypto
+          echo "CONFIG_CRYPTO_SHA256=y" >> "$CONFIG_FILE"
+          echo "CONFIG_CRYPTO_SHA512=y" >> "$CONFIG_FILE"
+          echo "CONFIG_CRYPTO_AES=y" >> "$CONFIG_FILE"
+          echo "CONFIG_CRYPTO_GCM=y" >> "$CONFIG_FILE"
           
-          # Fix trailing whitespace
-          find . -name "Kconfig" -type f -exec sed -i 's/[[:space:]]*$//' {} \;
+          # Filesystems
+          echo "CONFIG_OVERLAY_FS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_SQUASHFS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_SQUASHFS_XATTR=y" >> "$CONFIG_FILE"
+          echo "CONFIG_SQUASHFS_LZ4=y" >> "$CONFIG_FILE"
           
-          # Ensure newline at end of file
-          find . -name "Kconfig" -type f -exec sh -c 'tail -c1 "$1" | read -r _ || echo >> "$1"' _ {} \;
+          # Firmware loading
+          echo "CONFIG_FW_LOADER_USER_HELPER=y" >> "$CONFIG_FILE"
+          echo "CONFIG_FW_LOADER_USER_HELPER_FALLBACK=y" >> "$CONFIG_FILE"
           
-          echo "Kconfig syntax fixed."
-
-      - name: Integrate External Wi-Fi Drivers
-        if: ${{ github.event.inputs.WIFI_DRIVERS == 'true' }}
-        run: |
-          cd kernel_workspace/kernel-5.10/drivers/net/wireless
-          
-          # Update Kconfig
-          if ! grep -q "rtl8812au" Kconfig 2>/dev/null; then
-            echo 'source "drivers/net/wireless/rtl8812au/Kconfig"' >> Kconfig
-          fi
-          if ! grep -q "rtl8814au" Kconfig 2>/dev/null; then
-            echo 'source "drivers/net/wireless/rtl8814au/Kconfig"' >> Kconfig
-          fi
-          if ! grep -q "rtl8188eus" Kconfig 2>/dev/null; then
-            echo 'source "drivers/net/wireless/rtl8188eus/Kconfig"' >> Kconfig
-          fi
-          if ! grep -q "rtl88x2bu" Kconfig 2>/dev/null; then
-            echo 'source "drivers/net/wireless/rtl88x2bu/Kconfig"' >> Kconfig
-          fi
-          
-          # Update Makefile
-          if ! grep -q "rtl8812au" Makefile 2>/dev/null; then
-            echo 'obj-$(CONFIG_88XXAU) += rtl8812au/' >> Makefile
-          fi
-          if ! grep -q "rtl8814au" Makefile 2>/dev/null; then
-            echo 'obj-$(CONFIG_RTL8814AU) += rtl8814au/' >> Makefile
-          fi
-          if ! grep -q "rtl8188eus" Makefile 2>/dev/null; then
-            echo 'obj-$(CONFIG_RTL8188EUS) += rtl8188eus/' >> Makefile
-          fi
-          if ! grep -q "rtl88x2bu" Makefile 2>/dev/null; then
-            echo 'obj-$(CONFIG_RTL8822BU) += rtl88x2bu/' >> Makefile
-          fi
-          
-          echo "External drivers integrated."
-          
-          # Add configs
-          CONFIG_FILE=../../../arch/arm64/configs/gki_defconfig
-          echo "" >> "$CONFIG_FILE"
-          echo "# OUT-OF-TREE WIFI DRIVERS" >> "$CONFIG_FILE"
-          echo "CONFIG_88XXAU=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RTL8814AU=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RTL8188EUS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RTL8822BU=y" >> "$CONFIG_FILE"
+          # Misc
+          echo "CONFIG_BINFMT_MISC=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MAGIC_SYSRQ=y" >> "$CONFIG_FILE"
 
       - name: Fix Build Issues
         run: |
@@ -798,9 +566,6 @@ jobs:
           NH_SUFFIX=""
           if [ "${{ github.event.inputs.NETHUNTER }}" = "true" ]; then
             NH_SUFFIX="_NH"
-            if [ "${{ github.event.inputs.WIFI_DRIVERS }}" = "true" ]; then
-              NH_SUFFIX="${NH_SUFFIX}_WIFI"
-            fi
           fi
           echo "value=${KSU_SUFFIX}${NH_SUFFIX}" >> $GITHUB_OUTPUT
 
