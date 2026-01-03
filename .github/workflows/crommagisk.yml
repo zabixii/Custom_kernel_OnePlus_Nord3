@@ -1,4 +1,4 @@
-name: Build OnePlus Nord 3 AOSP - Zabixii⚡ (NetHunter)
+name: Build OnePlus Nord 3 AOSP - Zabixii (NetHunter)
 
 on:
   workflow_dispatch:
@@ -303,9 +303,6 @@ jobs:
           git add -A
           git commit -m "Custom suffix: $SUFFIX"
 
-      # ==========================================
-      # KSU/SUKISU STEPS (ONLY IF KSU=true)
-      # ==========================================
       - name: Add SukiSU Ultra
         if: ${{ github.event.inputs.KSU == 'true' }}
         run: |
@@ -387,9 +384,6 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> "$CONFIG_FILE"
 
-      # ==========================================
-      # COMMON CONFIGS (BOTH KSU AND MAGISK)
-      # ==========================================
       - name: Add Common Kernel Optimizations
         run: |
           cd kernel_workspace/kernel-5.10
@@ -410,9 +404,6 @@ jobs:
           echo "CONFIG_IP_NF_TARGET_ECN=y" >> "$CONFIG_FILE"
           sed -i 's/check_defconfig//' ./build.config.gki
 
-      # ==========================================
-      # NETHUNTER CONFIGS
-      # ==========================================
       - name: Add NetHunter Kernel Configuration
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
@@ -634,9 +625,6 @@ jobs:
           echo ""
           echo "NetHunter configs added!"
 
-      # ==========================================
-      # WIFI DRIVERS
-      # ==========================================
       - name: Add Wi-Fi Driver Configs (Mainline)
         if: ${{ github.event.inputs.WIFI_DRIVERS == 'true' }}
         run: |
@@ -749,9 +737,6 @@ jobs:
           echo "CONFIG_RTL8188EUS=y" >> "$CONFIG_FILE"
           echo "CONFIG_RTL8822BU=y" >> "$CONFIG_FILE"
 
-      # ==========================================
-      # BUILD FIXES
-      # ==========================================
       - name: Fix Build Issues
         run: |
           sed -i '/goto show_pad;/d' kernel_workspace/kernel-5.10/fs/proc/task_mmu.c
@@ -763,9 +748,6 @@ jobs:
           echo "KBUILD_BUILD_TIMESTAMP=${DATESTR}" >> "$GITHUB_ENV"
           echo "KBUILD_BUILD_VERSION=1" >> "$GITHUB_ENV"
 
-      # ==========================================
-      # BUILD
-      # ==========================================
       - name: Build Kernel
         run: |
           cd kernel_workspace/
@@ -793,9 +775,6 @@ jobs:
           
           echo "Kernel built successfully!"
 
-      # ==========================================
-      # PACKAGE
-      # ==========================================
       - name: Create AnyKernel3 Package
         run: |
           git clone https://github.com/darklord4567/Anykernel3_AOSP_NORD3.git --depth=1 Anykernel3_Zabixii
