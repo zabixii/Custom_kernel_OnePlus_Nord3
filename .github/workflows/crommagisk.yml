@@ -1,3 +1,4 @@
+
 name: Build OnePlus Nord 3 AOSP - Zabixii⚡
 
 on:
@@ -385,6 +386,69 @@ jobs:
       # ==========================================
       # NETHUNTER (ONLY IF NETHUNTER=true)
       # ==========================================
+      - name: Clone External Wi-Fi Drivers
+        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
+        run: |
+          cd kernel_workspace/kernel-5.10/drivers/net/wireless
+          echo "Cloning RTL8812AU..."
+          git clone https://github.com/aircrack-ng/rtl8812au.git --depth=1 || true
+          echo "Cloning RTL8814AU..."
+          git clone https://github.com/aircrack-ng/rtl8814au.git --depth=1 || true
+          echo "Cloning RTL8188EUS..."
+          git clone https://github.com/aircrack-ng/rtl8188eus.git --depth=1 || true
+          echo "Cloning RTL88x2BU..."
+          git clone https://github.com/morrownr/88x2bu-20210702.git rtl88x2bu --depth=1 || true
+          echo "External Wi-Fi drivers cloned."
+
+      - name: Fix External Wi-Fi Driver Kconfig Syntax
+        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
+        run: |
+          cd kernel_workspace/kernel-5.10/drivers/net/wireless
+          echo "Fixing Kconfig syntax issues..."
+          find . -name "Kconfig" -type f -exec sed -i 's/---help---/help/g' {} \;
+          find . -name "Kconfig" -type f -exec sed -i 's/[[:space:]]*$//' {} \;
+          for f in $(find . -name "Kconfig" -type f); do
+            if [ -n "$(tail -c1 "$f")" ]; then
+              echo "" >> "$f"
+            fi
+          done
+          echo "Kconfig syntax fixed."
+
+      - name: Integrate External Wi-Fi Drivers
+        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
+        run: |
+          cd kernel_workspace/kernel-5.10/drivers/net/wireless
+          
+          # Add to Kconfig
+          if [ -d "rtl8812au" ]; then
+            echo "source \"drivers/net/wireless/rtl8812au/Kconfig\"" >> Kconfig
+          fi
+          if [ -d "rtl8814au" ]; then
+            echo "source \"drivers/net/wireless/rtl8814au/Kconfig\"" >> Kconfig
+          fi
+          if [ -d "rtl8188eus" ]; then
+            echo "source \"drivers/net/wireless/rtl8188eus/Kconfig\"" >> Kconfig
+          fi
+          if [ -d "rtl88x2bu" ]; then
+            echo "source \"drivers/net/wireless/rtl88x2bu/Kconfig\"" >> Kconfig
+          fi
+          
+          # Add to Makefile
+          if [ -d "rtl8812au" ]; then
+            echo "obj-\$(CONFIG_88XXAU) += rtl8812au/" >> Makefile
+          fi
+          if [ -d "rtl8814au" ]; then
+            echo "obj-\$(CONFIG_8814AU) += rtl8814au/" >> Makefile
+          fi
+          if [ -d "rtl8188eus" ]; then
+            echo "obj-\$(CONFIG_RTL8188EUS) += rtl8188eus/" >> Makefile
+          fi
+          if [ -d "rtl88x2bu" ]; then
+            echo "obj-\$(CONFIG_RTL8822BU) += rtl88x2bu/" >> Makefile
+          fi
+          
+          echo "External Wi-Fi drivers integrated."
+
       - name: Add NetHunter Kernel Configuration
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
@@ -392,11 +456,11 @@ jobs:
           CONFIG_FILE=./arch/arm64/configs/gki_defconfig
           
           echo "" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
+          echo "# ===========================================
           echo "# NETHUNTER SUPPORT" >> "$CONFIG_FILE"
           echo "# ===========================================" >> "$CONFIG_FILE"
           
-          # Marker configs (verification)
+          # Marker configs
           echo "CONFIG_IKCONFIG=y" >> "$CONFIG_FILE"
           echo "CONFIG_IKCONFIG_PROC=y" >> "$CONFIG_FILE"
           echo "CONFIG_MAGIC_SYSRQ=y" >> "$CONFIG_FILE"
@@ -405,13 +469,13 @@ jobs:
           echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
           echo "CONFIG_USB_F_HID=y" >> "$CONFIG_FILE"
           
-          # USB Serial adapters
+          # USB Serial
           echo "CONFIG_USB_SERIAL_CH341=y" >> "$CONFIG_FILE"
           echo "CONFIG_USB_SERIAL_CP210X=y" >> "$CONFIG_FILE"
           echo "CONFIG_USB_SERIAL_FTDI_SIO=y" >> "$CONFIG_FILE"
           echo "CONFIG_USB_SERIAL_PL2303=y" >> "$CONFIG_FILE"
           
-          # Mainline Wi-Fi drivers (safe)
+          # Mainline Wi-Fi drivers
           echo "CONFIG_ATH9K_HTC=y" >> "$CONFIG_FILE"
           echo "CONFIG_RT2800USB=y" >> "$CONFIG_FILE"
           echo "CONFIG_MT7601U=y" >> "$CONFIG_FILE"
@@ -420,6 +484,12 @@ jobs:
           echo "CONFIG_RTL8XXXU=y" >> "$CONFIG_FILE"
           echo "CONFIG_RTL8192CU=y" >> "$CONFIG_FILE"
           echo "CONFIG_ZD1211RW=y" >> "$CONFIG_FILE"
+          
+          # External Wi-Fi drivers
+          echo "CONFIG_88XXAU=y" >> "$CONFIG_FILE"
+          echo "CONFIG_8814AU=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RTL8188EUS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RTL8822BU=y" >> "$CONFIG_FILE"
           
           # Networking
           echo "CONFIG_TUN=y" >> "$CONFIG_FILE"
@@ -437,7 +507,7 @@ jobs:
           echo "CONFIG_CFG80211_WEXT=y" >> "$CONFIG_FILE"
           echo "CONFIG_RFKILL=y" >> "$CONFIG_FILE"
           
-          # Netfilter extras
+          # Netfilter
           echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" >> "$CONFIG_FILE"
           echo "CONFIG_NETFILTER_XT_TARGET_TEE=y" >> "$CONFIG_FILE"
           echo "CONFIG_NETFILTER_XT_TARGET_LOG=y" >> "$CONFIG_FILE"
@@ -449,7 +519,7 @@ jobs:
           echo "CONFIG_NETFILTER_XT_MATCH_IPRANGE=y" >> "$CONFIG_FILE"
           echo "CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y" >> "$CONFIG_FILE"
           
-          # Namespaces (NO USER_NS - causes bootloop)
+          # Namespaces (NO USER_NS)
           echo "CONFIG_NET_NS=y" >> "$CONFIG_FILE"
           echo "CONFIG_PID_NS=y" >> "$CONFIG_FILE"
           echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"
