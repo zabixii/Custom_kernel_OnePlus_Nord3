@@ -375,56 +375,6 @@ jobs:
           echo "CONFIG_IP_NF_TARGET_ECN=y" >> "$CONFIG_FILE"
           sed -i 's/check_defconfig//' ./build.config.gki
 
-      - name: Clone External Wi-Fi Drivers
-        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
-        run: |
-          cd kernel_workspace/kernel-5.10/drivers/net/wireless
-          echo "Cloning RTL8812AU..."
-          git clone https://github.com/aircrack-ng/rtl8812au.git --depth=1 || true
-          echo "Cloning RTL8814AU..."
-          git clone https://github.com/aircrack-ng/rtl8814au.git --depth=1 || true
-          echo "Cloning RTL8188EUS..."
-          git clone https://github.com/aircrack-ng/rtl8188eus.git --depth=1 || true
-          echo "Cloning RTL88x2BU..."
-          git clone https://github.com/morrownr/88x2bu-20210702.git rtl88x2bu --depth=1 || true
-          echo "External drivers cloned."
-
-      - name: Fix External Wi-Fi Driver Kconfig Syntax
-        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
-        run: |
-          cd kernel_workspace/kernel-5.10/drivers/net/wireless
-          echo "Fixing Kconfig syntax..."
-          find . -name "Kconfig" -type f -exec sed -i 's/---help---/help/g' {} \;
-          find . -name "Kconfig" -type f -exec sed -i 's/[[:space:]]*$//' {} \;
-          for f in $(find . -name "Kconfig" -type f); do
-            if [ -n "$(tail -c1 "$f")" ]; then
-              echo "" >> "$f"
-            fi
-          done
-          echo "Kconfig syntax fixed."
-
-      - name: Integrate External Wi-Fi Drivers
-        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
-        run: |
-          cd kernel_workspace/kernel-5.10/drivers/net/wireless
-          if [ -d "rtl8812au" ]; then
-            echo 'source "drivers/net/wireless/rtl8812au/Kconfig"' >> Kconfig
-            echo 'obj-$(CONFIG_88XXAU) += rtl8812au/' >> Makefile
-          fi
-          if [ -d "rtl8814au" ]; then
-            echo 'source "drivers/net/wireless/rtl8814au/Kconfig"' >> Kconfig
-            echo 'obj-$(CONFIG_8814AU) += rtl8814au/' >> Makefile
-          fi
-          if [ -d "rtl8188eus" ]; then
-            echo 'source "drivers/net/wireless/rtl8188eus/Kconfig"' >> Kconfig
-            echo 'obj-$(CONFIG_RTL8188EUS) += rtl8188eus/' >> Makefile
-          fi
-          if [ -d "rtl88x2bu" ]; then
-            echo 'source "drivers/net/wireless/rtl88x2bu/Kconfig"' >> Kconfig
-            echo 'obj-$(CONFIG_RTL8822BU) += rtl88x2bu/' >> Makefile
-          fi
-          echo "External drivers integrated."
-
       - name: Add NetHunter Kernel Configuration
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
@@ -451,11 +401,6 @@ jobs:
           echo "CONFIG_RTL8XXXU=y" >> "$CONFIG_FILE"
           echo "CONFIG_RTL8192CU=y" >> "$CONFIG_FILE"
           echo "CONFIG_ZD1211RW=y" >> "$CONFIG_FILE"
-          
-          echo "CONFIG_88XXAU=y" >> "$CONFIG_FILE"
-          echo "CONFIG_8814AU=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RTL8188EUS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RTL8822BU=y" >> "$CONFIG_FILE"
           
           echo "CONFIG_TUN=y" >> "$CONFIG_FILE"
           echo "CONFIG_VETH=y" >> "$CONFIG_FILE"
