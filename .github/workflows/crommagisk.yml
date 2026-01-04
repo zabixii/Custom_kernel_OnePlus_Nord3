@@ -1,5 +1,5 @@
 
-name: Build OnePlus Nord 3 AOSP - Zabixii⚡
+name: Build OnePlus Nord 3 AOSP - Zabixii (NetHunter)
 
 on:
   workflow_dispatch:
@@ -61,7 +61,7 @@ on:
 
 jobs:
   notify_start:
-    name: Notify Start 🚀
+    name: Notify Start
     runs-on: ubuntu-latest
     steps:
       - name: Get current time (IST)
@@ -83,7 +83,7 @@ jobs:
 
       - name: Validate Input Combinations
         run: |
-          echo "🔧 Validating input combinations..."
+          echo "Validating input combinations..."
           FILE="${{ github.event.inputs.FILE }}"
           declare -A VALID_COMBINATIONS=(
             ["manifest_aosp"]="mt6983 android12 5.10"
@@ -103,11 +103,11 @@ jobs:
             done
           }
           COMBINATION="$(get_combination "$FILE")" || {
-            echo "❌ Unknown FILE: $FILE"
+            echo "Unknown FILE: $FILE"
             exit 1
           }
           read CPU ANDROID_VERSION KERNEL_VERSION <<< "$COMBINATION"
-          echo "✅ Valid: FILE=$FILE, CPU=$CPU, ANDROID=$ANDROID_VERSION, KERNEL=$KERNEL_VERSION"
+          echo "Valid: FILE=$FILE, CPU=$CPU, ANDROID=$ANDROID_VERSION, KERNEL=$KERNEL_VERSION"
           echo "CPU=$CPU" >> $GITHUB_ENV
           echo "ANDROID_VERSION=$ANDROID_VERSION" >> $GITHUB_ENV
           echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
@@ -276,9 +276,6 @@ jobs:
           git add -A
           git commit -m "Custom suffix: $SUFFIX"
 
-      # ==========================================
-      # KSU STEPS (ONLY IF KSU=true)
-      # ==========================================
       - name: Add SukiSU Ultra
         if: ${{ github.event.inputs.KSU == 'true' }}
         run: |
@@ -360,15 +357,10 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> "$CONFIG_FILE"
 
-      # ==========================================
-      # COMMON CONFIGS (ALWAYS)
-      # ==========================================
       - name: Add Common Kernel Optimizations
         run: |
           cd kernel_workspace/kernel-5.10
           CONFIG_FILE=./arch/arm64/configs/gki_defconfig
-          echo "" >> "$CONFIG_FILE"
-          echo "# Common Optimizations" >> "$CONFIG_FILE"
           echo "CONFIG_TMPFS_XATTR=y" >> "$CONFIG_FILE"
           echo "CONFIG_TMPFS_POSIX_ACL=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$CONFIG_FILE"
@@ -383,9 +375,6 @@ jobs:
           echo "CONFIG_IP_NF_TARGET_ECN=y" >> "$CONFIG_FILE"
           sed -i 's/check_defconfig//' ./build.config.gki
 
-      # ==========================================
-      # NETHUNTER (ONLY IF NETHUNTER=true)
-      # ==========================================
       - name: Clone External Wi-Fi Drivers
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
@@ -398,13 +387,13 @@ jobs:
           git clone https://github.com/aircrack-ng/rtl8188eus.git --depth=1 || true
           echo "Cloning RTL88x2BU..."
           git clone https://github.com/morrownr/88x2bu-20210702.git rtl88x2bu --depth=1 || true
-          echo "External Wi-Fi drivers cloned."
+          echo "External drivers cloned."
 
       - name: Fix External Wi-Fi Driver Kconfig Syntax
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10/drivers/net/wireless
-          echo "Fixing Kconfig syntax issues..."
+          echo "Fixing Kconfig syntax..."
           find . -name "Kconfig" -type f -exec sed -i 's/---help---/help/g' {} \;
           find . -name "Kconfig" -type f -exec sed -i 's/[[:space:]]*$//' {} \;
           for f in $(find . -name "Kconfig" -type f); do
@@ -418,36 +407,23 @@ jobs:
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10/drivers/net/wireless
-          
-          # Add to Kconfig
           if [ -d "rtl8812au" ]; then
-            echo "source \"drivers/net/wireless/rtl8812au/Kconfig\"" >> Kconfig
+            echo 'source "drivers/net/wireless/rtl8812au/Kconfig"' >> Kconfig
+            echo 'obj-$(CONFIG_88XXAU) += rtl8812au/' >> Makefile
           fi
           if [ -d "rtl8814au" ]; then
-            echo "source \"drivers/net/wireless/rtl8814au/Kconfig\"" >> Kconfig
+            echo 'source "drivers/net/wireless/rtl8814au/Kconfig"' >> Kconfig
+            echo 'obj-$(CONFIG_8814AU) += rtl8814au/' >> Makefile
           fi
           if [ -d "rtl8188eus" ]; then
-            echo "source \"drivers/net/wireless/rtl8188eus/Kconfig\"" >> Kconfig
+            echo 'source "drivers/net/wireless/rtl8188eus/Kconfig"' >> Kconfig
+            echo 'obj-$(CONFIG_RTL8188EUS) += rtl8188eus/' >> Makefile
           fi
           if [ -d "rtl88x2bu" ]; then
-            echo "source \"drivers/net/wireless/rtl88x2bu/Kconfig\"" >> Kconfig
+            echo 'source "drivers/net/wireless/rtl88x2bu/Kconfig"' >> Kconfig
+            echo 'obj-$(CONFIG_RTL8822BU) += rtl88x2bu/' >> Makefile
           fi
-          
-          # Add to Makefile
-          if [ -d "rtl8812au" ]; then
-            echo "obj-\$(CONFIG_88XXAU) += rtl8812au/" >> Makefile
-          fi
-          if [ -d "rtl8814au" ]; then
-            echo "obj-\$(CONFIG_8814AU) += rtl8814au/" >> Makefile
-          fi
-          if [ -d "rtl8188eus" ]; then
-            echo "obj-\$(CONFIG_RTL8188EUS) += rtl8188eus/" >> Makefile
-          fi
-          if [ -d "rtl88x2bu" ]; then
-            echo "obj-\$(CONFIG_RTL8822BU) += rtl88x2bu/" >> Makefile
-          fi
-          
-          echo "External Wi-Fi drivers integrated."
+          echo "External drivers integrated."
 
       - name: Add NetHunter Kernel Configuration
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
@@ -455,27 +431,18 @@ jobs:
           cd kernel_workspace/kernel-5.10
           CONFIG_FILE=./arch/arm64/configs/gki_defconfig
           
-          echo "" >> "$CONFIG_FILE"
-          echo "# ===========================================
-          echo "# NETHUNTER SUPPORT" >> "$CONFIG_FILE"
-          echo "# ===========================================" >> "$CONFIG_FILE"
-          
-          # Marker configs
           echo "CONFIG_IKCONFIG=y" >> "$CONFIG_FILE"
           echo "CONFIG_IKCONFIG_PROC=y" >> "$CONFIG_FILE"
           echo "CONFIG_MAGIC_SYSRQ=y" >> "$CONFIG_FILE"
           
-          # USB HID/BadUSB
           echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
           echo "CONFIG_USB_F_HID=y" >> "$CONFIG_FILE"
           
-          # USB Serial
           echo "CONFIG_USB_SERIAL_CH341=y" >> "$CONFIG_FILE"
           echo "CONFIG_USB_SERIAL_CP210X=y" >> "$CONFIG_FILE"
           echo "CONFIG_USB_SERIAL_FTDI_SIO=y" >> "$CONFIG_FILE"
           echo "CONFIG_USB_SERIAL_PL2303=y" >> "$CONFIG_FILE"
           
-          # Mainline Wi-Fi drivers
           echo "CONFIG_ATH9K_HTC=y" >> "$CONFIG_FILE"
           echo "CONFIG_RT2800USB=y" >> "$CONFIG_FILE"
           echo "CONFIG_MT7601U=y" >> "$CONFIG_FILE"
@@ -485,29 +452,24 @@ jobs:
           echo "CONFIG_RTL8192CU=y" >> "$CONFIG_FILE"
           echo "CONFIG_ZD1211RW=y" >> "$CONFIG_FILE"
           
-          # External Wi-Fi drivers
           echo "CONFIG_88XXAU=y" >> "$CONFIG_FILE"
           echo "CONFIG_8814AU=y" >> "$CONFIG_FILE"
           echo "CONFIG_RTL8188EUS=y" >> "$CONFIG_FILE"
           echo "CONFIG_RTL8822BU=y" >> "$CONFIG_FILE"
           
-          # Networking
           echo "CONFIG_TUN=y" >> "$CONFIG_FILE"
           echo "CONFIG_VETH=y" >> "$CONFIG_FILE"
           echo "CONFIG_BRIDGE=y" >> "$CONFIG_FILE"
           echo "CONFIG_VLAN_8021Q=y" >> "$CONFIG_FILE"
           echo "CONFIG_MACVLAN=y" >> "$CONFIG_FILE"
           
-          # Input/HID
           echo "CONFIG_INPUT_UINPUT=y" >> "$CONFIG_FILE"
           echo "CONFIG_UHID=y" >> "$CONFIG_FILE"
           
-          # Wireless framework
           echo "CONFIG_WIRELESS_EXT=y" >> "$CONFIG_FILE"
           echo "CONFIG_CFG80211_WEXT=y" >> "$CONFIG_FILE"
           echo "CONFIG_RFKILL=y" >> "$CONFIG_FILE"
           
-          # Netfilter
           echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" >> "$CONFIG_FILE"
           echo "CONFIG_NETFILTER_XT_TARGET_TEE=y" >> "$CONFIG_FILE"
           echo "CONFIG_NETFILTER_XT_TARGET_LOG=y" >> "$CONFIG_FILE"
@@ -519,37 +481,32 @@ jobs:
           echo "CONFIG_NETFILTER_XT_MATCH_IPRANGE=y" >> "$CONFIG_FILE"
           echo "CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y" >> "$CONFIG_FILE"
           
-          # Namespaces (NO USER_NS)
           echo "CONFIG_NET_NS=y" >> "$CONFIG_FILE"
           echo "CONFIG_PID_NS=y" >> "$CONFIG_FILE"
           echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"
           echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"
           
-          # Bluetooth
           echo "CONFIG_BT_RFCOMM=y" >> "$CONFIG_FILE"
           echo "CONFIG_BT_RFCOMM_TTY=y" >> "$CONFIG_FILE"
           echo "CONFIG_BT_BNEP=y" >> "$CONFIG_FILE"
           echo "CONFIG_BT_HIDP=y" >> "$CONFIG_FILE"
           echo "CONFIG_BT_HCIBTUSB=y" >> "$CONFIG_FILE"
           
-          # PPP/VPN
           echo "CONFIG_PPP=y" >> "$CONFIG_FILE"
           echo "CONFIG_PPP_DEFLATE=y" >> "$CONFIG_FILE"
           echo "CONFIG_PPP_MPPE=y" >> "$CONFIG_FILE"
           echo "CONFIG_PPTP=y" >> "$CONFIG_FILE"
           echo "CONFIG_PPPOE=y" >> "$CONFIG_FILE"
           
-          # Filesystems
           echo "CONFIG_OVERLAY_FS=y" >> "$CONFIG_FILE"
           echo "CONFIG_SQUASHFS=y" >> "$CONFIG_FILE"
           echo "CONFIG_SQUASHFS_XZ=y" >> "$CONFIG_FILE"
           echo "CONFIG_SQUASHFS_LZO=y" >> "$CONFIG_FILE"
           
-          # Crypto
           echo "CONFIG_CRYPTO_USER_API_HASH=y" >> "$CONFIG_FILE"
           echo "CONFIG_CRYPTO_USER_API_SKCIPHER=y" >> "$CONFIG_FILE"
           
-          echo "# END NETHUNTER" >> "$CONFIG_FILE"
+          echo "NetHunter configuration added."
 
       - name: Fix Build Issues
         run: |
@@ -573,20 +530,16 @@ jobs:
       - name: Verify Kernel Build
         run: |
           IMAGE="kernel_workspace/out/android12-5.10/kernel-5.10/arch/arm64/boot/Image.gz"
-          
           if [ ! -f "$IMAGE" ]; then
             echo "ERROR: Image.gz not found!"
             exit 1
           fi
-          
           SIZE=$(stat -c%s "$IMAGE")
           echo "Image.gz: $SIZE bytes ($(($SIZE / 1024 / 1024)) MB)"
-          
           if [ "$SIZE" -lt 1000000 ]; then
             echo "ERROR: Image.gz too small!"
             exit 1
           fi
-          
           echo "Kernel built successfully!"
 
       - name: Create AnyKernel3 Package
