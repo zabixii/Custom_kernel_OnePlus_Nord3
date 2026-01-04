@@ -396,8 +396,88 @@ jobs:
           echo "# NETHUNTER SUPPORT" >> "$CONFIG_FILE"
           echo "# ===========================================" >> "$CONFIG_FILE"
           
-          # Just 1 safe config for testing
+          # Marker configs (verification)
+          echo "CONFIG_IKCONFIG=y" >> "$CONFIG_FILE"
+          echo "CONFIG_IKCONFIG_PROC=y" >> "$CONFIG_FILE"
           echo "CONFIG_MAGIC_SYSRQ=y" >> "$CONFIG_FILE"
+          
+          # USB HID/BadUSB
+          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_F_HID=y" >> "$CONFIG_FILE"
+          
+          # USB Serial adapters
+          echo "CONFIG_USB_SERIAL_CH341=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_SERIAL_CP210X=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_SERIAL_FTDI_SIO=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_SERIAL_PL2303=y" >> "$CONFIG_FILE"
+          
+          # Mainline Wi-Fi drivers (safe)
+          echo "CONFIG_ATH9K_HTC=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RT2800USB=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MT7601U=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MT76x0U=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MT76x2U=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RTL8XXXU=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RTL8192CU=y" >> "$CONFIG_FILE"
+          echo "CONFIG_ZD1211RW=y" >> "$CONFIG_FILE"
+          
+          # Networking
+          echo "CONFIG_TUN=y" >> "$CONFIG_FILE"
+          echo "CONFIG_VETH=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BRIDGE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_VLAN_8021Q=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MACVLAN=y" >> "$CONFIG_FILE"
+          
+          # Input/HID
+          echo "CONFIG_INPUT_UINPUT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_UHID=y" >> "$CONFIG_FILE"
+          
+          # Wireless framework
+          echo "CONFIG_WIRELESS_EXT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_CFG80211_WEXT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RFKILL=y" >> "$CONFIG_FILE"
+          
+          # Netfilter extras
+          echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_TARGET_TEE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_TARGET_LOG=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_U32=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_STRING=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_MULTIPORT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_MARK=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_MAC=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_IPRANGE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y" >> "$CONFIG_FILE"
+          
+          # Namespaces (NO USER_NS - causes bootloop)
+          echo "CONFIG_NET_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PID_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"
+          
+          # Bluetooth
+          echo "CONFIG_BT_RFCOMM=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_RFCOMM_TTY=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_BNEP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_HIDP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_HCIBTUSB=y" >> "$CONFIG_FILE"
+          
+          # PPP/VPN
+          echo "CONFIG_PPP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PPP_DEFLATE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PPP_MPPE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PPTP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PPPOE=y" >> "$CONFIG_FILE"
+          
+          # Filesystems
+          echo "CONFIG_OVERLAY_FS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_SQUASHFS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_SQUASHFS_XZ=y" >> "$CONFIG_FILE"
+          echo "CONFIG_SQUASHFS_LZO=y" >> "$CONFIG_FILE"
+          
+          # Crypto
+          echo "CONFIG_CRYPTO_USER_API_HASH=y" >> "$CONFIG_FILE"
+          echo "CONFIG_CRYPTO_USER_API_SKCIPHER=y" >> "$CONFIG_FILE"
           
           echo "# END NETHUNTER" >> "$CONFIG_FILE"
 
