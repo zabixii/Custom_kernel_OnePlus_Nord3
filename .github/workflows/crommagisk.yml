@@ -1,4 +1,3 @@
-
 name: Build OnePlus Nord 3 AOSP - Zabixii⚡
 
 on:
@@ -28,7 +27,7 @@ on:
         type: choice
         description: "SUSFS module download method (only if KSU enabled)"
         required: true
-        default: CI
+        default: NoN
         options:
           - CI
           - Release
@@ -37,7 +36,7 @@ on:
         type: string
         description: "Branch name/Custom version identifier (only if KSU enabled)"
         required: false
-        default: "susfs-main/Zabixii"
+        default: ""
       FAST_BUILD:
         type: boolean
         description: "Enable fast build?"
