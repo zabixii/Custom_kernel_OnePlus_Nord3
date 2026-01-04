@@ -1,5 +1,5 @@
 
-name: Build OnePlus Nord 3 AOSP - Zabixii⚡ (Minimal Test)
+name: Build OnePlus Nord 3 AOSP - Zabixii⚡
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ on:
         type: string
         description: "Custom kernel suffix"
         required: false
-        default: "Zabixii-TEST"
+        default: "Zabixii"
       KSU:
         type: boolean
         description: "Enable KernelSU/SukiSU? (false = Magisk only)"
@@ -37,7 +37,7 @@ on:
         type: string
         description: "Branch name/Custom version identifier (only if KSU enabled)"
         required: false
-        default: "susfs-main/Zabixii⚡"
+        default: "susfs-main/Zabixii"
       FAST_BUILD:
         type: boolean
         description: "Enable fast build?"
@@ -47,17 +47,17 @@ on:
         type: boolean
         description: "Enable manual hooks (VFS)? (only if KSU enabled)"
         required: true
-        default: true
+        default: false
       KPM:
         type: boolean
         description: "Enable Kernel Patch Module (KPM)? (only if KSU enabled)"
         required: true
-        default: true
+        default: false
       NETHUNTER:
         type: boolean
         description: "Enable NetHunter kernel support?"
         required: true
-        default: true
+        default: false
 
 jobs:
   notify_start:
@@ -70,7 +70,7 @@ jobs:
 
   build:
     needs: notify_start
-    name: ${{ github.event.inputs.FAST_BUILD == 'true' && '[FAST]' || '' }}${{ github.event.inputs.KSU == 'true' && ' [KSU]' || ' [MAGISK]' }}${{ github.event.inputs.NETHUNTER == 'true' && ' [NH-TEST]' || '' }} ${{ github.event.inputs.SUFFIX }}
+    name: ${{ github.event.inputs.FAST_BUILD == 'true' && '[FAST]' || '' }}${{ github.event.inputs.KSU == 'true' && ' [KSU]' || ' [MAGISK]' }}${{ github.event.inputs.NETHUNTER == 'true' && ' [NH]' || '' }} ${{ github.event.inputs.SUFFIX }}
     runs-on: ubuntu-latest
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
@@ -181,7 +181,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ runner.os }}-${{ github.ref_name }}-${{ github.event.inputs.FILE }}-${{ env.BUILD_METHOD }}-${{ github.event.inputs.FAST_BUILD == 'true' && 'fast' || 'normal' }}-17
+          key: ccache-${{ runner.os }}-${{ github.ref_name }}-${{ github.event.inputs.FILE }}-${{ env.BUILD_METHOD }}-${{ github.event.inputs.FAST_BUILD == 'true' && 'fast' || 'normal' }}-16
 
       - name: Initialize Ccache
         run: |
@@ -276,7 +276,9 @@ jobs:
           git add -A
           git commit -m "Custom suffix: $SUFFIX"
 
-      # KSU STEPS (if enabled)
+      # ==========================================
+      # KSU STEPS (ONLY IF KSU=true)
+      # ==========================================
       - name: Add SukiSU Ultra
         if: ${{ github.event.inputs.KSU == 'true' }}
         run: |
@@ -358,7 +360,9 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> "$CONFIG_FILE"
 
-      # COMMON CONFIGS
+      # ==========================================
+      # COMMON CONFIGS (ALWAYS)
+      # ==========================================
       - name: Add Common Kernel Optimizations
         run: |
           cd kernel_workspace/kernel-5.10
@@ -379,25 +383,24 @@ jobs:
           echo "CONFIG_IP_NF_TARGET_ECN=y" >> "$CONFIG_FILE"
           sed -i 's/check_defconfig//' ./build.config.gki
 
-      # MINIMAL NETHUNTER TEST - ONLY 1 CONFIG!
-      - name: Add NetHunter Test Config (MINIMAL)
+      # ==========================================
+      # NETHUNTER (ONLY IF NETHUNTER=true)
+      # ==========================================
+      - name: Add NetHunter Kernel Configuration
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10
           CONFIG_FILE=./arch/arm64/configs/gki_defconfig
           
-          echo "=============================================="
-          echo "  NetHunter MINIMAL TEST"
-          echo "  Adding ONLY 1 harmless config"
-          echo "=============================================="
-          
           echo "" >> "$CONFIG_FILE"
-          echo "# NETHUNTER TEST MARKER" >> "$CONFIG_FILE"
+          echo "# ===========================================" >> "$CONFIG_FILE"
+          echo "# NETHUNTER SUPPORT" >> "$CONFIG_FILE"
+          echo "# ===========================================" >> "$CONFIG_FILE"
+          
+          # Just 1 safe config for testing
           echo "CONFIG_MAGIC_SYSRQ=y" >> "$CONFIG_FILE"
           
-          echo "✅ Added CONFIG_MAGIC_SYSRQ=y"
-          echo "   This is completely harmless and just enables SysRq debug keys"
-          echo "=============================================="
+          echo "# END NETHUNTER" >> "$CONFIG_FILE"
 
       - name: Fix Build Issues
         run: |
@@ -453,7 +456,7 @@ jobs:
           else
             SUFFIX="_MAGISK"
           fi
-          [ "${{ github.event.inputs.NETHUNTER }}" = "true" ] && SUFFIX="${SUFFIX}_NH_TEST"
+          [ "${{ github.event.inputs.NETHUNTER }}" = "true" ] && SUFFIX="${SUFFIX}_NH"
           echo "value=${SUFFIX}" >> $GITHUB_OUTPUT
 
       - name: Upload Kernel Artifact
