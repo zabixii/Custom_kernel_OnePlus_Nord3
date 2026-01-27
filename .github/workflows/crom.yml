@@ -1,4 +1,4 @@
-name: Build OnePlus Nord 3 AOSP
+name: Build OnePlus Nord 3 AOSP - Zabixii (NetHunter)
 
 on:
   workflow_dispatch:
@@ -15,23 +15,28 @@ on:
         default: "F"
       SUFFIX:
         type: string
-        description: "Custom kernel suffix (leave empty for a random string)"
+        description: "Custom kernel suffix"
         required: false
-        default: "DareDevil⚡"
+        default: "Zabixii"
+      KSU:
+        type: boolean
+        description: "Enable KernelSU/SukiSU? (false = Magisk only)"
+        required: true
+        default: false
       SUSFS_CI:
         type: choice
-        description: "SUSFS module download method"
+        description: "SUSFS module download method (only if KSU enabled)"
         required: true
-        default: CI
+        default: NoN
         options:
           - CI
           - Release
           - NoN
       KSU_META:
         type: string
-        description: "Branch name/Custom version identifier"
+        description: "Branch name/Custom version identifier (only if KSU enabled)"
         required: false
-        default: "susfs-main/DareDevil⚡"
+        default: ""
       FAST_BUILD:
         type: boolean
         description: "Enable fast build?"
@@ -39,18 +44,23 @@ on:
         default: true
       VFS:
         type: boolean
-        description: "Enable manual hooks (VFS)?"
+        description: "Enable manual hooks (VFS)? (only if KSU enabled)"
         required: true
-        default: true
+        default: false
       KPM:
         type: boolean
-        description: "Enable Kernel Patch Module (KPM)?"
+        description: "Enable Kernel Patch Module (KPM)? (only if KSU enabled)"
         required: true
-        default: true
+        default: false
+      NETHUNTER:
+        type: boolean
+        description: "Enable NetHunter kernel support?"
+        required: true
+        default: false
 
 jobs:
   notify_start:
-    name: Notify Start 🚀
+    name: Notify Start
     runs-on: ubuntu-latest
     steps:
       - name: Get current time (IST)
@@ -59,7 +69,7 @@ jobs:
 
   build:
     needs: notify_start
-    name: ${{ github.event.inputs.FAST_BUILD == 'true' && ' [FAST]' || '' }}For ${{ github.event.inputs.FILE }} ${{ github.event.inputs.SUFFIX }}
+    name: ${{ github.event.inputs.FAST_BUILD == 'true' && '[FAST]' || '' }}${{ github.event.inputs.KSU == 'true' && ' [KSU]' || ' [MAGISK]' }}${{ github.event.inputs.NETHUNTER == 'true' && ' [NH]' || '' }} ${{ github.event.inputs.SUFFIX }}
     runs-on: ubuntu-latest
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
@@ -72,7 +82,7 @@ jobs:
 
       - name: Validate Input Combinations
         run: |
-          echo "🔧 Validating input combinations..."
+          echo "Validating input combinations..."
           FILE="${{ github.event.inputs.FILE }}"
           declare -A VALID_COMBINATIONS=(
             ["manifest_aosp"]="mt6983 android12 5.10"
@@ -92,15 +102,11 @@ jobs:
             done
           }
           COMBINATION="$(get_combination "$FILE")" || {
-            echo "❌ Unknown FILE: $FILE"
-            echo "Valid base models:"
-            for model in "${!VALID_COMBINATIONS[@]}"; do
-              echo "- $model: ${VALID_COMBINATIONS[$model]}"
-            done
+            echo "Unknown FILE: $FILE"
             exit 1
           }
           read CPU ANDROID_VERSION KERNEL_VERSION <<< "$COMBINATION"
-          echo "✅ Valid combination: FILE=$FILE, CPU=$CPU, ANDROID_VERSION=$ANDROID_VERSION, KERNEL_VERSION=$KERNEL_VERSION"
+          echo "Valid: FILE=$FILE, CPU=$CPU, ANDROID=$ANDROID_VERSION, KERNEL=$KERNEL_VERSION"
           echo "CPU=$CPU" >> $GITHUB_ENV
           echo "ANDROID_VERSION=$ANDROID_VERSION" >> $GITHUB_ENV
           echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
@@ -136,46 +142,27 @@ jobs:
         run: |
           echo "CCACHE_DIR=$HOME/.ccache_${{ github.event.inputs.FILE }}" >> $GITHUB_ENV
           mkdir -p "$HOME/.ccache_${{ github.event.inputs.FILE }}"
-          echo "set: $HOME/.ccache_${{ github.event.inputs.FILE }}"
 
       - name: Configure Git
         run: |
           git config --global user.name "hemasai1109"
           git config --global user.email "pandunelluri.1109@gmail.com"
 
-      - name: Configure APTC
+      - name: Configure APT Cache
         run: |
           APT_CACHE_DIR="$HOME/apt-cache"
           mkdir -p "$APT_CACHE_DIR"/{archives,lists/partial}
           echo "Dir::Cache \"$APT_CACHE_DIR\";" | sudo tee /etc/apt/apt.conf.d/90user-cache
           echo "Dir::Cache::archives \"$APT_CACHE_DIR/archives\";" | sudo tee -a /etc/apt/apt.conf.d/90user-cache
           echo "Dir::State::lists \"$APT_CACHE_DIR/lists\";" | sudo tee -a /etc/apt/apt.conf.d/90user-cache
-          echo "Acquire::Check-Valid-Until \"false\";" | sudo tee -a /etc/apt/apt.conf.d/90user-cache
-          echo "Acquire::Languages \"none\";" | sudo tee -a /etc/apt/apt.conf.d/90user-cache
           sudo chown -R $USER:$USER "$APT_CACHE_DIR"
 
       - name: Set APT Cache
         uses: actions/cache@v3
         with:
           path: ${{ env.HOME }}/apt-cache
-          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/build_stock_kernel_n3.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-apt-
-
-      - name: Debug Show Selected Inputs
-        run: |
-          echo "Selected CPU: ${{ env.CPU }}"
-          echo "Selected ANDROID_VERSION: ${{ env.ANDROID_VERSION }}"
-          echo "Selected KERNEL_VERSION: ${{ env.KERNEL_VERSION }}"
-          echo "Selected BUILD_METHOD: ${{ env.BUILD_METHOD }}"
-          echo "Selected FILE: ${{ github.event.inputs.FILE }}"
-          echo "Custom BUILD_TIME: ${{ github.event.inputs.BUILD_TIME }}"
-          echo "Custom SUFFIX: ${{ github.event.inputs.SUFFIX }}"
-          echo "Selected FAST_BUILD: ${{ github.event.inputs.FAST_BUILD }}"
-          echo "Selected SUSFS_CI: ${{ github.event.inputs.SUSFS_CI }}"
-          echo "Selected VFS: ${{ github.event.inputs.VFS }}"
-          echo "Selected KPM: ${{ github.event.inputs.KPM }}"
-          echo "Custom KSU_META: ${{ github.event.inputs.KSU_META }}"
+          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/crom.yml') }}
+          restore-keys: ${{ runner.os }}-apt-
 
       - name: Install Dependencies
         run: |
@@ -184,10 +171,8 @@ jobs:
           mkdir -p "$APT_CACHE_DIR/lists/partial"
           sudo apt -o Dir::Cache="$APT_CACHE_DIR" update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt -o Dir::Cache="$APT_CACHE_DIR" install -yq --no-install-recommends \
-            python3 git curl ccache libelf-dev \
-            build-essential flex bison libssl-dev \
-            libncurses-dev liblz4-tool zlib1g-dev \
-            libxml2-utils rsync unzip
+            python3 git curl ccache libelf-dev build-essential flex bison libssl-dev \
+            libncurses-dev liblz4-tool zlib1g-dev libxml2-utils rsync unzip
           sudo apt install -y libelf-dev ccache llvm lld
           sudo apt update -qq
 
@@ -195,23 +180,17 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ runner.os }}-${{ github.ref_name }}-${{ github.event.inputs.FILE }}-${{ env.BUILD_METHOD }}-${{ github.event.inputs.FAST_BUILD == 'true' && 'alpha' || 'beta' }}-15
+          key: ccache-${{ runner.os }}-${{ github.ref_name }}-${{ github.event.inputs.FILE }}-${{ env.BUILD_METHOD }}-${{ github.event.inputs.FAST_BUILD == 'true' && 'fast' || 'normal' }}-16
 
       - name: Initialize Ccache
         run: |
           INIT_FLAG="${{ env.CCACHE_DIR }}/.ccache_initialized"
           if command -v ccache >/dev/null 2>&1; then
             if [ ! -f "$INIT_FLAG" ]; then
-              echo "Initializing ccache (${{ env.CCACHE_DIR }})..."
               mkdir -p "${{ env.CCACHE_DIR }}"
               ccache -M ${{ env.CCACHE_MAXSIZE }}
               touch "$INIT_FLAG"
-              echo "ccache initialization complete"
-            else
-              echo "ccache already initialized, skipping"
             fi
-          else
-            echo "ccache not installed, skipping"
           fi
           ccache -s
 
@@ -226,199 +205,83 @@ jobs:
           mkdir kernel_workspace && cd kernel_workspace
           repo init -u https://github.com/hemasai1109/Custom_kernel_OnePlus_Nord3.git -m ${{ github.event.inputs.FILE }}.xml --depth=1
           repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle --force-sync
+
       - name: Copy and Rename Build Configuration
         run: |
           git clone https://github.com/hemasai1109/Custom_kernel_OnePlus_Nord3.git kernel_workflow
           cp -v kernel_workflow/build.config.oplus6983-d kernel_workspace/kernel-5.10/
-          echo "pwd cmd!!!!!!!!!!!"
-          pwd
-          echo "cd kernel_workspace/kernel-5.10 cmd!!!!!!!!!!"
           cd kernel_workspace/kernel-5.10
-          echo "ls before rename !!!!!!!!!"
-          ls
-          
-          # --- ADDED STEPS START HERE ---
-          
-          echo "Renaming the build config file"
           mv build.config.oplus6983-d build.config.oplus6983
-          
-          echo "Validate the renamed file"
           ls -ls build.config.oplus6983
-          
-          # --- ADDED STEPS END HERE ---
-          
-          echo "ls after rename !!!!!!!!!"
-          ls
-          echo "pwd cmd!!!!!!!!!!!"
-          pwd
 
+      - name: Set Build Config Path
+        run: echo "BUILD_CONFIG=kernel-5.10/build.config.oplus6983" >> $GITHUB_ENV
 
-
-      - name: Add in bash.rc
+      - name: Fix Vendor Directory Structure
         run: |
-          echo "BUILD_CONFIG=kernel-5.10/build.config.oplus6983" >> $GITHUB_ENV
-
-      - name: Vendor Issue Fix
-        run: |
-          echo "pwd"
-          pwd
-          echo "ls"
-          ls
-          echo "cd kernel_workspace"
           cd kernel_workspace
-          echo "pwd"
-          pwd
-          echo "ls"
-          ls
-          echo "cd kernel_module"
-          cd kernel_module
-          echo "pwd"
-          pwd
-          echo "ls"
-          ls
-          echo "cd .."
-          cd ..
-          echo "pwd"
-          pwd
-          echo "ls"
-          ls
-          echo "moving every thing one dir up"
           mv kernel_module/vendor .
-          echo "pwd"
-          pwd
-          echo "ls"
-          ls
           cd ..
-          echo "pwd"
-          pwd
-          echo "ls"
-          ls
-          echo "rm -rf kernel_module"
           rm -rf kernel_module
-        
-      - name: Create thermal Makefile
+
+      - name: Create Thermal Makefile
         run: |
-          echo "pwd"
-          pwd
-          echo "ls"
-          ls
-          echo "cd kernel_workspace"
-          cd kernel_workspace
-          echo "pwd"
-          pwd
-          echo "ls"
-          ls
-          echo "cd & make file"
-          cd vendor/oplus/kernel/cpu/thermal && \touch Makefile && \
-          echo "obj-y += horae_shell_temp" > Makefile && \
+          cd kernel_workspace/vendor/oplus/kernel/cpu/thermal
+          touch Makefile
+          echo "obj-y += horae_shell_temp" > Makefile
           echo "obj-y += oplus_ipa_thermal" >> Makefile
-          echo "THERMAL MAKEFILE!!!!!!!!!!!!"
-          echo "pwd"
-          pwd
-          echo "ls"
-          ls
-          cat Makefile
-        
-      - name: Create Makefile in fingerprint mtk
+
+      - name: Create Fingerprint Makefile
         run: |
-          echo "pwd"
-          pwd
-          echo "ls"
-          ls
-          echo "cd to mtk !!!!!!!!"
           cd kernel_workspace/vendor/oplus/secure/biometrics/fingerprints/bsp/drivers_kernel/component3.0/mtk
-          echo "pwd"
-          pwd
-          echo "ls"
-          ls
-          echo "rm Makefile !!!!!!!!"
-          rm Makefile 
-          cat > Makefile <<'EOF'
+          rm -f Makefile
+          cat > Makefile << 'EOF'
           obj-$(CONFIG_OPLUS_FINGERPRINT_COMMON) += oplus_fp_common/
-
-          ### Capacitive fingerprint sensor
-          #obj-$(CONFIG_OPLUS_FINGERPRINT_FPC) += fpc/
-
-          #obj-$(CONFIG_OPLUS_FINGERPRINT_EGIS) += egis/
-
-          ### Optical fingerprint sensor
           ifneq ($(CONFIG_OPLUS_FINGERPRINT_GOODIX)_$(CONFIG_OPLUS_FINGERPRINT_GOODIX_OPTICAL), _)
           obj-y += goodix_optical_fp/
           endif
-          #obj-$(CONFIG_OPLUS_FINGERPRINT_SILEAD_OPTICAL) += silead_optical_fp/
-          #obj-$(CONFIG_OPLUS_FINGERPRINT_EGIS_OPTICAL)   += egis_optical_fp/
           obj-$(CONFIG_OPLUS_FINGERPRINT_JIIOV_OPTICAL)  += anc_driver/
           obj-$(CONFIG_OPLUS_FINGERPRINT_SILEAD_CAP)  += silead/
-
-          ### FEATURE MACRO
           ccflags-$(CONFIG_OPLUS_FINGERPRINT_NAVIGATION_ENABLE) += -DFP_NAVIGATION_ENABLE
           EOF
 
-      - name: Fix codec conflict by editing mt6357-accdet.c file
+      - name: Fix Audio Codec Conflict
         run: |
-          echo "pwd"
-          pwd
-          echo "ls"
-          ls
-          echo "cd to codecs !!!!!!!!"
           cd kernel_workspace/kernel-5.10/sound/soc/codecs/
-          echo "pwd"
-          pwd
-          echo "ls"
-          ls
-          ls -l mt6357-accdet.c
           sed -i 's/^int accdet_read_audio_res(unsigned int res_value)/int mt6357_accdet_read_audio_res(unsigned int res_value)/' mt6357-accdet.c
           sed -i 's/^EXPORT_SYMBOL(accdet_read_audio_res);/EXPORT_SYMBOL(mt6357_accdet_read_audio_res);/' mt6357-accdet.c
-          grep -E 'mt6357_accdet_read_audio_res' mt6357-accdet.c
 
-
-
-      - name: Custom Kernel Suffix if set
+      - name: Apply Custom Kernel Suffix
         if: ${{ github.event.inputs.SUFFIX != '' }}
         run: |
           cd kernel_workspace
           SUFFIX="${{ github.event.inputs.SUFFIX }}"
           ANDROID_VERSION="${{ env.ANDROID_VERSION }}"
           FAST_BUILD="${{ github.event.inputs.FAST_BUILD }}"
-          for path in \
-            kernel-${{ env.KERNEL_VERSION }}/scripts/setlocalversion; do
+          for path in kernel-${{ env.KERNEL_VERSION }}/scripts/setlocalversion; do
             [ -f "$path" ] || continue
-            echo "Modifying: $path"
             sed -i 's/ -dirty//g' "$path"
             sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$path"
-            if grep -q 'KERNELVERSION.*scm_version' "$path"; then
-              echo "Detected NEW setlocalversion format"
-              sed -i "s|echo \"\${KERNELVERSION}.*scm_version}\"|echo \"\${KERNELVERSION}-${ANDROID_VERSION}-${SUFFIX}\"|" "$path"
-            elif grep -q 'echo "\$res"' "$path"; then
-              echo "Detected OLD setlocalversion format"
+            if grep -q 'echo "\$res"' "$path"; then
               if [ "$FAST_BUILD" = "true" ]; then
-                echo "FAST_BUILD enabled: using static res"
                 sed -i "s/^res=.*/res=\"-${ANDROID_VERSION}-${SUFFIX}\"/" "$path"
               else
-                echo "Standard build: injecting suffix via cut/echo"
-                if [[ -f ./kernel-5.10/build_with_bazel.py ]]; then
-                  echo "When using the official script and building with build_with_bazel, the build may fail due to a limit on the number of special characters. Please modify the configuration if that happens."
-                fi
                 tac "$path" | sed "0,/echo \"\\\$res\"/s//res=\\\$(echo \\\$res | cut -d- -f1-2)-${SUFFIX}; echo \"\\\$res\";/" | tac > "$path.tmp" && mv "$path.tmp" "$path"
               fi
-            else
-              echo "Unknown format, appending echo manually"
-              echo "echo \"\$res-${SUFFIX}\"" >> "$path"
             fi
             chmod +x "$path"
           done
           cd kernel-${{ env.KERNEL_VERSION }}
           git add -A
-          git commit -m "Custom suffix & removed -dirty"
+          git commit -m "Custom suffix: $SUFFIX"
 
       - name: Add SukiSU Ultra
+        if: ${{ github.event.inputs.KSU == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10
           META="${{ github.event.inputs.KSU_META }}"
           BRANCH_NAME="${META%%/*}"
           CUSTOM_TAG="${META#*/}"
-          echo "Branch name: $BRANCH_NAME"
-          echo "Custom version identifier: $CUSTOM_TAG"
           curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s "$BRANCH_NAME"
           cd ./KernelSU
           KSU_API_VERSION=$(curl -fsSL "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/$BRANCH_NAME/kernel/Makefile" | \
@@ -433,77 +296,38 @@ jobs:
           echo "KSU_VERSION_FULL := $KSU_VERSION_FULL" >> kernel/Makefile
           KSU_VERSION=$(expr $(git rev-list --count main 2>/dev/null || echo 13000) + 10700)
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
-          echo "::group:: Preview of version information in the final Makefile"
-          grep -A5 "KSU_VERSION_API" kernel/Makefile
-          echo "::endgroup::"
-
-      - name: Get Kernel Suffix
-        id: suffix_step
-        run: |
-          if [ "${{ github.event.inputs.SUFFIX }}" != "" ]; then
-            echo "suffix=${{ github.event.inputs.SUFFIX }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "suffix=${{ steps.random_suffix_step.outputs.suffix }}" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Apply Patches SukiSU Ultra
+        if: ${{ github.event.inputs.KSU == 'true' }}
         run: |
           cd kernel_workspace
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}
           git clone https://github.com/ShirkNeko/SukiSU_patch.git
           cd kernel-5.10
-          echo "Fetching susfs patches"
           cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch ./
           cp ../susfs4ksu/kernel_patches/fs/* ./fs/
           cp ../susfs4ksu/kernel_patches/include/linux/* ./include/linux/
-          GKI_V="${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}"
-          SUBLEVEL=$(grep '^SUBLEVEL *=' Makefile | head -n1 | cut -d= -f2 | tr -d ' ')
-          if [ "$GKI_V" == "android13-5.15" ] && [ "$SUBLEVEL" -lt 123 ]; then
-            echo "Fixing some potential legacy issues for kernel versions 5.15.0 to 5.15.123"
-            curl -Lo fix_5.15.legacy.patch --retry 5 --retry-delay 2 --retry-connrefused https://raw.githubusercontent.com/Numbersf/Action-Build/SukiSU-Ultra/patches/fix_5.15.legacy
-            patch -p1 < fix_5.15.legacy.patch
-            echo "fix_5.15_patch complete"
-          fi
-          KERNEL_VERSION="${{ env.KERNEL_VERSION }}"
-          file="${{ github.event.inputs.FILE }}"
-          TRUSTY_EXISTS="false"
-          if [[ "$KERNEL_VERSION" == "6.6" ]]; then
-            if grep -qr 'common-modules/trusty' "$GITHUB_WORKSPACE/.repo/manifests_fallback/${file}.xml"; then
-              TRUSTY_EXISTS="true"
-            fi
-            echo "trusty_exists=$TRUSTY_EXISTS" >> $GITHUB_OUTPUT
-            if [[ "$TRUSTY_EXISTS" == "false" ]]; then
-              echo "Fixing susfs issue for some models with kernel version 6.6"
-              sed -i 's/-32,12 +32,38/-32,11 +32,37/g' 50_add_susfs_in_gki-${{ env.ANDROID_VERSION }}-${KERNEL_VERSION}.patch
-              sed -i '/#include <trace\/hooks\/fs.h>/d' 50_add_susfs_in_gki-${{ env.ANDROID_VERSION }}-${KERNEL_VERSION}.patch
-            fi
-          fi
-          echo "Applying susfs patch"
           patch -p1 < 50_add_susfs_in_gki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch || true
-          echo "susfs_patch complete"
 
       - name: Apply Hide Stuff Patches
+        if: ${{ github.event.inputs.KSU == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10
           cp ../SukiSU_patch/69_hide_stuff.patch ./
-          echo "Applying hide stuff patch"
           patch -p1 -F 3 < 69_hide_stuff.patch
-          echo "hide_stuff_patch complete"
 
-      - name: Apply VFS
-        if: ${{ github.event.inputs.VFS == 'true' }}
+      - name: Apply VFS Hooks
+        if: ${{ github.event.inputs.KSU == 'true' && github.event.inputs.VFS == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10
           cp ../SukiSU_patch/hooks/syscall_hooks.patch ./
-          echo "Applying vfs patch"
           patch -p1 -F 3 < syscall_hooks.patch
-          echo "vfs_patch complete"
 
-      - name: Add Configuration Settings
+      - name: Add KSU Configuration
+        if: ${{ github.event.inputs.KSU == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10
           CONFIG_FILE=./arch/arm64/configs/gki_defconfig
-          KERNEL_VERSION="${{ env.KERNEL_VERSION }}"
           echo "CONFIG_KSU=y" >> "$CONFIG_FILE"
           if [ "${{ github.event.inputs.KPM }}" = "true" ]; then
             echo "CONFIG_KPM=y" >> "$CONFIG_FILE"
@@ -531,6 +355,11 @@ jobs:
           echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> "$CONFIG_FILE"
+
+      - name: Add Common Kernel Optimizations
+        run: |
+          cd kernel_workspace/kernel-5.10
+          CONFIG_FILE=./arch/arm64/configs/gki_defconfig
           echo "CONFIG_TMPFS_XATTR=y" >> "$CONFIG_FILE"
           echo "CONFIG_TMPFS_POSIX_ACL=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$CONFIG_FILE"
@@ -545,57 +374,142 @@ jobs:
           echo "CONFIG_IP_NF_TARGET_ECN=y" >> "$CONFIG_FILE"
           sed -i 's/check_defconfig//' ./build.config.gki
 
-      - name: Custom BUILD_TIME
-        if: ${{ github.event.inputs.BUILD_TIME != '' && !contains('Ff', github.event.inputs.BUILD_TIME) }}
-        shell: bash
+      - name: Add NetHunter Kernel Configuration
+        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
+        run: |
+          cd kernel_workspace/kernel-5.10
+          CONFIG_FILE=./arch/arm64/configs/gki_defconfig
+          
+          echo "CONFIG_IKCONFIG=y" >> "$CONFIG_FILE"
+          echo "CONFIG_IKCONFIG_PROC=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MAGIC_SYSRQ=y" >> "$CONFIG_FILE"
+          
+          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_F_HID=y" >> "$CONFIG_FILE"
+          
+          echo "CONFIG_USB_SERIAL_CH341=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_SERIAL_CP210X=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_SERIAL_FTDI_SIO=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_SERIAL_PL2303=y" >> "$CONFIG_FILE"
+          
+          echo "CONFIG_ATH9K_HTC=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RT2800USB=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MT7601U=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MT76x0U=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MT76x2U=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RTL8XXXU=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RTL8192CU=y" >> "$CONFIG_FILE"
+          echo "CONFIG_ZD1211RW=y" >> "$CONFIG_FILE"
+          
+          echo "CONFIG_TUN=y" >> "$CONFIG_FILE"
+          echo "CONFIG_VETH=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BRIDGE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_VLAN_8021Q=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MACVLAN=y" >> "$CONFIG_FILE"
+          
+          echo "CONFIG_INPUT_UINPUT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_UHID=y" >> "$CONFIG_FILE"
+          
+          echo "CONFIG_WIRELESS_EXT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_CFG80211_WEXT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RFKILL=y" >> "$CONFIG_FILE"
+          
+          echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_TARGET_TEE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_TARGET_LOG=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_U32=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_STRING=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_MULTIPORT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_MARK=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_MAC=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_IPRANGE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y" >> "$CONFIG_FILE"
+          
+          echo "CONFIG_NET_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PID_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"
+          
+          echo "CONFIG_BT_RFCOMM=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_RFCOMM_TTY=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_BNEP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_HIDP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_HCIBTUSB=y" >> "$CONFIG_FILE"
+          
+          echo "CONFIG_PPP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PPP_DEFLATE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PPP_MPPE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PPTP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PPPOE=y" >> "$CONFIG_FILE"
+          
+          echo "CONFIG_OVERLAY_FS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_SQUASHFS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_SQUASHFS_XZ=y" >> "$CONFIG_FILE"
+          echo "CONFIG_SQUASHFS_LZO=y" >> "$CONFIG_FILE"
+          
+          echo "CONFIG_CRYPTO_USER_API_HASH=y" >> "$CONFIG_FILE"
+          echo "CONFIG_CRYPTO_USER_API_SKCIPHER=y" >> "$CONFIG_FILE"
+          
+          echo "NetHunter configuration added."
+
+      - name: Fix Build Issues
+        run: |
+          sed -i '/goto show_pad;/d' kernel_workspace/kernel-5.10/fs/proc/task_mmu.c
+
+      - name: Custom Build Time
+        if: ${{ github.event.inputs.BUILD_TIME != '' && github.event.inputs.BUILD_TIME != 'F' }}
         run: |
           DATESTR="${{ github.event.inputs.BUILD_TIME }}"
           echo "KBUILD_BUILD_TIMESTAMP=${DATESTR}" >> "$GITHUB_ENV"
           echo "KBUILD_BUILD_VERSION=1" >> "$GITHUB_ENV"
-          cd kernel_workspace/kernel-5.10/
-          for f in common/scripts/mkcompile_h msm-kernel/scripts/mkcompile_h; do
-            if [ -f "$f" ]; then
-              echo "Patching mkcompile_h with BUILD_TIME=$DATESTR"
-              if grep -q 'UTS_VERSION=' "$f"; then
-                perl -pi -e "s{UTS_VERSION=\"\\\$\\(.*?\\)\"}{UTS_VERSION=\"#1 SMP PREEMPT $DATESTR\"}" "$f"
-              else
-                perl -0777 -pi -e "s{cat <<EOF}{cat <<EOF\n#undef UTS_VERSION\n#define UTS_VERSION \"#1 SMP PREEMPT $DATESTR\" } unless /UTS_VERSION/" "$f"
-              fi
-            fi
-          done
-      - name: Fix undeclared show_pad label
-        run: |
-          sed -i '/goto show_pad;/d' kernel_workspace/kernel-5.10/fs/proc/task_mmu.c
 
-
-      - name: Build Kernel FAST
-        if: ${{ github.event.inputs.FAST_BUILD == 'true' }}
-        id: fast_build
+      - name: Build Kernel
         run: |
           cd kernel_workspace/
-          pwd
-          ls
           export PATH="/usr/lib/ccache:$PATH"
           export CC="ccache clang"
           ./build/build.sh
           ccache -s
 
-
-      - name: Make AnyKernel3_CROM
+      - name: Verify Kernel Build
         run: |
-          git clone https://github.com/darklord4567/Anykernel3_AOSP_NORD3.git --depth=1
-          cp kernel_workspace/out/android12-5.10/kernel-5.10/arch/arm64/boot/Image.gz Anykernel3_AOSP_NORD3/Image.gz
+          IMAGE="kernel_workspace/out/android12-5.10/kernel-5.10/arch/arm64/boot/Image.gz"
+          if [ ! -f "$IMAGE" ]; then
+            echo "ERROR: Image.gz not found!"
+            exit 1
+          fi
+          SIZE=$(stat -c%s "$IMAGE")
+          echo "Image.gz: $SIZE bytes ($(($SIZE / 1024 / 1024)) MB)"
+          if [ "$SIZE" -lt 1000000 ]; then
+            echo "ERROR: Image.gz too small!"
+            exit 1
+          fi
+          echo "Kernel built successfully!"
 
-      - name: Set zip Suffix
+      - name: Create AnyKernel3 Package
+        run: |
+          git clone https://github.com/darklord4567/Anykernel3_AOSP_NORD3.git --depth=1 Anykernel3_Zabixii
+          cp kernel_workspace/out/android12-5.10/kernel-5.10/arch/arm64/boot/Image.gz Anykernel3_Zabixii/Image.gz
+
+      - name: Set Artifact Suffix
         id: suffix
         run: |
-          echo "value=${{ github.event.inputs.VFS == 'true' && '_VFS' || '' }}${{ github.event.inputs.KPM == 'true' && '_KPM' || '' }}${{ github.event.inputs.SCHED== 'true' && '_SCHED' || '' }}" >> $GITHUB_OUTPUT
+          SUFFIX=""
+          if [ "${{ github.event.inputs.KSU }}" = "true" ]; then
+            SUFFIX="_KSU"
+            [ "${{ github.event.inputs.VFS }}" = "true" ] && SUFFIX="${SUFFIX}_VFS"
+            [ "${{ github.event.inputs.KPM }}" = "true" ] && SUFFIX="${SUFFIX}_KPM"
+          else
+            SUFFIX="_MAGISK"
+          fi
+          [ "${{ github.event.inputs.NETHUNTER }}" = "true" ] && SUFFIX="${SUFFIX}_NH"
+          echo "value=${SUFFIX}" >> $GITHUB_OUTPUT
 
-      - name: Upload AnyKernel3_CROM
+      - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "Nebula_Kernel_SuKiSU_AOSP${{ steps.suffix.outputs.value }}_by_Daredevil⚡"
-          path: ./Anykernel3_AOSP_NORD3/*
+          name: "Zabixii_Kernel${{ steps.suffix.outputs.value }}_by_Zabixii"
+          path: ./Anykernel3_Zabixii/*
 
       - name: Post-build Disk Check
         run: df -h
