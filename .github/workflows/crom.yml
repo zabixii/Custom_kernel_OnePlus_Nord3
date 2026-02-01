@@ -1,6 +1,6 @@
 # ============================================
 # Zabixii Kernel Build Workflow
-# Version: 1.2.0
+# Version: 1.3.0
 # ============================================
 
 name: Build OnePlus Nord 3 AOSP - Zabixii⚡ (NetHunter)
@@ -111,15 +111,10 @@ jobs:
             exit 1
           }
           read CPU ANDROID_VERSION KERNEL_VERSION <<< "$COMBINATION"
-          echo "Valid: FILE=$FILE, CPU=$CPU, ANDROID=$ANDROID_VERSION, KERNEL=$KERNEL_VERSION"
           echo "CPU=$CPU" >> $GITHUB_ENV
           echo "ANDROID_VERSION=$ANDROID_VERSION" >> $GITHUB_ENV
           echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
-          if [[ "$ANDROID_VERSION" == "android12" && "$KERNEL_VERSION" == "5.10" ]]; then
-            echo "BUILD_METHOD=perf" >> $GITHUB_ENV
-          else
-            echo "BUILD_METHOD=gki" >> $GITHUB_ENV
-          fi
+          echo "BUILD_METHOD=perf" >> $GITHUB_ENV
 
       - name: Maximize Build Space
         uses: easimon/maximize-build-space@master
@@ -158,13 +153,12 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ runner.os }}-${{ github.event.inputs.FILE }}-${{ github.event.inputs.NETHUNTER }}-v1
+          key: ccache-${{ runner.os }}-${{ github.event.inputs.FILE }}-v2
 
       - name: Initialize Ccache
         run: |
           mkdir -p "${{ env.CCACHE_DIR }}"
           ccache -M ${{ env.CCACHE_MAXSIZE }}
-          ccache -s
 
       - name: Install Repo Tool
         run: |
@@ -228,10 +222,7 @@ jobs:
           for path in kernel-${{ env.KERNEL_VERSION }}/scripts/setlocalversion; do
             [ -f "$path" ] || continue
             sed -i 's/ -dirty//g' "$path"
-            sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$path"
-            if grep -q 'echo "\$res"' "$path"; then
-              sed -i "s/^res=.*/res=\"-${ANDROID_VERSION}-${SUFFIX}\"/" "$path"
-            fi
+            sed -i "s/^res=.*/res=\"-${ANDROID_VERSION}-${SUFFIX}\"/" "$path"
             chmod +x "$path"
           done
           cd kernel-${{ env.KERNEL_VERSION }}
@@ -271,7 +262,24 @@ jobs:
         if: ${{ github.event.inputs.KSU == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10
-          echo "CONFIG_KSU=y" >> arch/arm64/configs/gki_defconfig
+          cat >> arch/arm64/configs/gki_defconfig << 'EOF'
+          CONFIG_KSU=y
+          CONFIG_KSU_SUSFS=y
+          CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y
+          CONFIG_KSU_SUSFS_SUS_PATH=y
+          CONFIG_KSU_SUSFS_SUS_MOUNT=y
+          CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y
+          CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y
+          CONFIG_KSU_SUSFS_SUS_KSTAT=y
+          CONFIG_KSU_SUSFS_SUS_OVERLAYFS=n
+          CONFIG_KSU_SUSFS_TRY_UMOUNT=y
+          CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y
+          CONFIG_KSU_SUSFS_SPOOF_UNAME=y
+          CONFIG_KSU_SUSFS_ENABLE_LOG=y
+          CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
+          CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
+          CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
+          EOF
           if [ "${{ github.event.inputs.KPM }}" = "true" ]; then
             echo "CONFIG_KPM=y" >> arch/arm64/configs/gki_defconfig
           fi
@@ -282,162 +290,182 @@ jobs:
             echo "CONFIG_KSU_SUSFS_SUS_SU=y" >> arch/arm64/configs/gki_defconfig
             echo "CONFIG_KPROBES=y" >> arch/arm64/configs/gki_defconfig
           fi
-          echo "CONFIG_KSU_SUSFS=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=n" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_TRY_UMOUNT=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> arch/arm64/configs/gki_defconfig
 
       - name: Add Common Optimizations
         run: |
           cd kernel_workspace/kernel-5.10
-          echo "CONFIG_TMPFS_XATTR=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TMPFS_POSIX_ACL=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_ADVANCED=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_BBR=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_NET_SCH_FQ=y" >> arch/arm64/configs/gki_defconfig
+          cat >> arch/arm64/configs/gki_defconfig << 'EOF'
+          CONFIG_TMPFS_XATTR=y
+          CONFIG_TMPFS_POSIX_ACL=y
+          CONFIG_TCP_CONG_ADVANCED=y
+          CONFIG_TCP_CONG_BBR=y
+          CONFIG_NET_SCH_FQ=y
+          EOF
           sed -i 's/check_defconfig//' ./build.config.gki
 
-      - name: Create NetHunter Config Injection Script
+      - name: Clone and Integrate MT76 Driver
+        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
+        run: |
+          cd kernel_workspace/kernel-5.10/drivers/net/wireless
+          
+          echo "Checking for existing MT76..."
+          if [ ! -d "mediatek/mt76" ]; then
+            echo "MT76 not found. Cloning..."
+            mkdir -p mediatek
+            cd mediatek
+            git clone --depth=1 https://github.com/openwrt/mt76.git
+            cd mt76
+            
+            # Fix Kconfig syntax
+            find . -name "Kconfig" -exec sed -i 's/---help---/help/g' {} \;
+            
+            # Create proper Kconfig
+            cat > Kconfig << 'KEOF'
+          config MT76_CORE
+            tristate
+            depends on MAC80211
+            
+          config MT76_USB
+            tristate
+            depends on MT76_CORE
+            
+          config MT76x02_LIB
+            tristate
+            depends on MT76_CORE
+            
+          config MT76x02_USB
+            tristate
+            depends on MT76_USB
+            
+          config MT76x2_COMMON
+            tristate
+            depends on MT76_CORE
+            
+          config MT76x2U
+            tristate "MediaTek MT76x2U (USB) support"
+            depends on MAC80211 && USB
+            select MT76_CORE
+            select MT76_USB
+            select MT76x02_LIB
+            select MT76x02_USB
+            select MT76x2_COMMON
+            help
+              This adds support for MT7612U-based USB 3.0 wireless adapters.
+          KEOF
+            
+            cd ..
+            
+            # Create Makefile for mediatek
+            cat > Makefile << 'MEOF'
+          obj-$(CONFIG_MT76x2U) += mt76/
+          MEOF
+            
+            # Create Kconfig for mediatek
+            cat > Kconfig << 'KEOF'
+          source "drivers/net/wireless/mediatek/mt76/Kconfig"
+          KEOF
+            
+            cd ..
+            
+            # Add mediatek to wireless Makefile
+            if ! grep -q "mediatek" Makefile; then
+              echo "obj-y += mediatek/" >> Makefile
+            fi
+            
+            # Add mediatek to wireless Kconfig
+            if ! grep -q "mediatek" Kconfig; then
+              echo 'source "drivers/net/wireless/mediatek/Kconfig"' >> Kconfig
+            fi
+            
+            echo "MT76 driver integrated."
+          else
+            echo "MT76 already exists."
+          fi
+
+      - name: Add NetHunter Configs to All Defconfigs
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10
-          cat > nethunter_inject.sh << 'NHEOF'
-          #!/bin/bash
-          CONFIG_PATH="$1"
-          if [ ! -f "$CONFIG_PATH" ]; then
-            echo "Config not found: $CONFIG_PATH"
-            exit 0
+          
+          NETHUNTER_CONFIGS="
+          CONFIG_IKCONFIG=y
+          CONFIG_IKCONFIG_PROC=y
+          CONFIG_MAGIC_SYSRQ=y
+          CONFIG_USB_CONFIGFS_F_HID=y
+          CONFIG_USB_F_HID=y
+          CONFIG_USB_SERIAL_CH341=y
+          CONFIG_USB_SERIAL_CP210X=y
+          CONFIG_USB_SERIAL_FTDI_SIO=y
+          CONFIG_USB_SERIAL_PL2303=y
+          CONFIG_WIRELESS=y
+          CONFIG_WIRELESS_EXT=y
+          CONFIG_WEXT_CORE=y
+          CONFIG_WEXT_PROC=y
+          CONFIG_WEXT_PRIV=y
+          CONFIG_CFG80211=y
+          CONFIG_CFG80211_WEXT=y
+          CONFIG_MAC80211=y
+          CONFIG_MAC80211_MESH=y
+          CONFIG_RFKILL=y
+          CONFIG_MT76_CORE=y
+          CONFIG_MT76_USB=y
+          CONFIG_MT76x02_LIB=y
+          CONFIG_MT76x02_USB=y
+          CONFIG_MT76x2_COMMON=y
+          CONFIG_MT76x2U=y
+          CONFIG_TUN=y
+          CONFIG_VETH=y
+          CONFIG_BRIDGE=y
+          CONFIG_VLAN_8021Q=y
+          CONFIG_MACVLAN=y
+          CONFIG_INPUT_UINPUT=y
+          CONFIG_UHID=y
+          CONFIG_NETFILTER_XT_TARGET_TPROXY=y
+          CONFIG_NETFILTER_XT_TARGET_TEE=y
+          CONFIG_NETFILTER_XT_TARGET_LOG=y
+          CONFIG_NETFILTER_XT_MATCH_U32=y
+          CONFIG_NETFILTER_XT_MATCH_STRING=y
+          CONFIG_NETFILTER_XT_MATCH_MULTIPORT=y
+          CONFIG_NETFILTER_XT_MATCH_MARK=y
+          CONFIG_NETFILTER_XT_MATCH_MAC=y
+          CONFIG_NETFILTER_XT_MATCH_IPRANGE=y
+          CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y
+          CONFIG_NET_NS=y
+          CONFIG_PID_NS=y
+          CONFIG_IPC_NS=y
+          CONFIG_UTS_NS=y
+          CONFIG_BT_RFCOMM=y
+          CONFIG_BT_RFCOMM_TTY=y
+          CONFIG_BT_BNEP=y
+          CONFIG_BT_HIDP=y
+          CONFIG_BT_HCIBTUSB=y
+          CONFIG_PPP=y
+          CONFIG_PPP_DEFLATE=y
+          CONFIG_PPP_MPPE=y
+          CONFIG_PPTP=y
+          CONFIG_PPPOE=y
+          CONFIG_OVERLAY_FS=y
+          CONFIG_SQUASHFS=y
+          CONFIG_SQUASHFS_XZ=y
+          CONFIG_SQUASHFS_LZO=y
+          CONFIG_CRYPTO_USER_API_HASH=y
+          CONFIG_CRYPTO_USER_API_SKCIPHER=y
+          "
+          
+          # Add to gki_defconfig
+          echo "$NETHUNTER_CONFIGS" >> arch/arm64/configs/gki_defconfig
+          
+          # Add to mgk_64_k510_defconfig if exists
+          if [ -f "arch/arm64/configs/mgk_64_k510_defconfig" ]; then
+            echo "$NETHUNTER_CONFIGS" >> arch/arm64/configs/mgk_64_k510_defconfig
           fi
-          echo "Injecting NetHunter configs into: $CONFIG_PATH"
           
-          # Use scripts/config to enable options
-          SCRIPTS_CONFIG="./scripts/config --file $CONFIG_PATH"
-          
-          # Marker
-          $SCRIPTS_CONFIG --enable CONFIG_IKCONFIG
-          $SCRIPTS_CONFIG --enable CONFIG_IKCONFIG_PROC
-          $SCRIPTS_CONFIG --enable CONFIG_MAGIC_SYSRQ
-          
-          # USB HID
-          $SCRIPTS_CONFIG --enable CONFIG_USB_CONFIGFS_F_HID
-          $SCRIPTS_CONFIG --enable CONFIG_USB_F_HID
-          
-          # USB Serial
-          $SCRIPTS_CONFIG --enable CONFIG_USB_SERIAL_CH341
-          $SCRIPTS_CONFIG --enable CONFIG_USB_SERIAL_CP210X
-          $SCRIPTS_CONFIG --enable CONFIG_USB_SERIAL_FTDI_SIO
-          $SCRIPTS_CONFIG --enable CONFIG_USB_SERIAL_PL2303
-          
-          # Wireless framework
-          $SCRIPTS_CONFIG --enable CONFIG_WIRELESS
-          $SCRIPTS_CONFIG --enable CONFIG_WIRELESS_EXT
-          $SCRIPTS_CONFIG --enable CONFIG_WEXT_CORE
-          $SCRIPTS_CONFIG --enable CONFIG_WEXT_PROC
-          $SCRIPTS_CONFIG --enable CONFIG_WEXT_PRIV
-          $SCRIPTS_CONFIG --enable CONFIG_CFG80211
-          $SCRIPTS_CONFIG --enable CONFIG_CFG80211_WEXT
-          $SCRIPTS_CONFIG --enable CONFIG_MAC80211
-          $SCRIPTS_CONFIG --enable CONFIG_MAC80211_MESH
-          $SCRIPTS_CONFIG --enable CONFIG_RFKILL
-          
-          # MT76 driver
-          $SCRIPTS_CONFIG --enable CONFIG_MT76_CORE
-          $SCRIPTS_CONFIG --enable CONFIG_MT76_USB
-          $SCRIPTS_CONFIG --enable CONFIG_MT76x02_LIB
-          $SCRIPTS_CONFIG --enable CONFIG_MT76x02_USB
-          $SCRIPTS_CONFIG --enable CONFIG_MT76x2_COMMON
-          $SCRIPTS_CONFIG --enable CONFIG_MT76x2U
-          
-          # Networking
-          $SCRIPTS_CONFIG --enable CONFIG_TUN
-          $SCRIPTS_CONFIG --enable CONFIG_VETH
-          $SCRIPTS_CONFIG --enable CONFIG_BRIDGE
-          $SCRIPTS_CONFIG --enable CONFIG_VLAN_8021Q
-          $SCRIPTS_CONFIG --enable CONFIG_MACVLAN
-          
-          # Input
-          $SCRIPTS_CONFIG --enable CONFIG_INPUT_UINPUT
-          $SCRIPTS_CONFIG --enable CONFIG_UHID
-          
-          # Netfilter
-          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_TARGET_TPROXY
-          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_TARGET_TEE
-          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_TARGET_LOG
-          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_MATCH_U32
-          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_MATCH_STRING
-          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_MATCH_MULTIPORT
-          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_MATCH_MARK
-          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_MATCH_MAC
-          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_MATCH_IPRANGE
-          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_MATCH_CONNTRACK
-          
-          # Namespaces
-          $SCRIPTS_CONFIG --enable CONFIG_NET_NS
-          $SCRIPTS_CONFIG --enable CONFIG_PID_NS
-          $SCRIPTS_CONFIG --enable CONFIG_IPC_NS
-          $SCRIPTS_CONFIG --enable CONFIG_UTS_NS
-          
-          # Bluetooth
-          $SCRIPTS_CONFIG --enable CONFIG_BT_RFCOMM
-          $SCRIPTS_CONFIG --enable CONFIG_BT_RFCOMM_TTY
-          $SCRIPTS_CONFIG --enable CONFIG_BT_BNEP
-          $SCRIPTS_CONFIG --enable CONFIG_BT_HIDP
-          $SCRIPTS_CONFIG --enable CONFIG_BT_HCIBTUSB
-          
-          # PPP
-          $SCRIPTS_CONFIG --enable CONFIG_PPP
-          $SCRIPTS_CONFIG --enable CONFIG_PPP_DEFLATE
-          $SCRIPTS_CONFIG --enable CONFIG_PPP_MPPE
-          $SCRIPTS_CONFIG --enable CONFIG_PPTP
-          $SCRIPTS_CONFIG --enable CONFIG_PPPOE
-          
-          # Filesystems
-          $SCRIPTS_CONFIG --enable CONFIG_OVERLAY_FS
-          $SCRIPTS_CONFIG --enable CONFIG_SQUASHFS
-          $SCRIPTS_CONFIG --enable CONFIG_SQUASHFS_XZ
-          $SCRIPTS_CONFIG --enable CONFIG_SQUASHFS_LZO
-          
-          # Crypto
-          $SCRIPTS_CONFIG --enable CONFIG_CRYPTO_USER_API_HASH
-          $SCRIPTS_CONFIG --enable CONFIG_CRYPTO_USER_API_SKCIPHER
-          
-          echo "NetHunter config injection complete!"
-          NHEOF
-          chmod +x nethunter_inject.sh
-
-      - name: Patch Build Script for NetHunter
-        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
-        run: |
-          cd kernel_workspace
-          
-          # Find the build script
-          BUILD_SCRIPT="build/build.sh"
-          
-          if [ -f "$BUILD_SCRIPT" ]; then
-            echo "Patching build script..."
-            
-            # Add hook after defconfig generation
-            sed -i '/make.*defconfig/a \
-          # NetHunter config injection\
-          if [ -f "${KERNEL_DIR}/nethunter_inject.sh" ]; then\
-            echo "Running NetHunter config injection..."\
-            bash "${KERNEL_DIR}/nethunter_inject.sh" "${OUT_DIR}/.config"\
-            make -C ${KERNEL_DIR} O=${OUT_DIR} olddefconfig\
-          fi' "$BUILD_SCRIPT"
-            
-            echo "Build script patched!"
+          # Add to oplus6983.config if exists
+          if [ -f "kernel/configs/oplus6983.config" ]; then
+            echo "$NETHUNTER_CONFIGS" >> kernel/configs/oplus6983.config
           fi
+          
+          echo "NetHunter configs added to all defconfigs."
 
       - name: Fix show_pad Error
         run: |
