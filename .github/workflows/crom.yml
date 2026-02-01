@@ -1,11 +1,11 @@
 # ============================================
 # Zabixii Kernel Build Workflow
-# Version: 1.4.0
-# - Smart verification of all patches
-# - Auto-fix if patches not applied
+# Version: 1.5.0
+# - Magisk only (no KSU)
+# - Fixed NetHunter step conditions
 # ============================================
 
-name: Build OnePlus Nord 3 AOSP - Zabixii⚡ (NetHunter)
+name: Build OnePlus Nord 3 AOSP - Zabixii (NetHunter)
 
 on:
   workflow_dispatch:
@@ -25,56 +25,26 @@ on:
         description: "Custom kernel suffix"
         required: false
         default: "Zabixii"
-      KSU:
-        type: boolean
-        description: "Enable KernelSU/SukiSU? (false = Magisk only)"
-        required: true
-        default: false
-      SUSFS_CI:
-        type: choice
-        description: "SUSFS module download method (only if KSU enabled)"
-        required: true
-        default: NoN
-        options:
-          - CI
-          - Release
-          - NoN
-      KSU_META:
-        type: string
-        description: "Branch name/Custom version identifier (only if KSU enabled)"
-        required: false
-        default: ""
       FAST_BUILD:
         type: boolean
         description: "Enable fast build?"
         required: true
         default: true
-      VFS:
-        type: boolean
-        description: "Enable manual hooks (VFS)? (only if KSU enabled)"
-        required: true
-        default: false
-      KPM:
-        type: boolean
-        description: "Enable Kernel Patch Module (KPM)? (only if KSU enabled)"
-        required: true
-        default: false
       NETHUNTER:
         type: boolean
         description: "Enable NetHunter kernel support?"
         required: true
-        default: false
+        default: true
 
 jobs:
   build:
-    name: ${{ github.event.inputs.FAST_BUILD == 'true' && '[FAST]' || '' }}${{ github.event.inputs.KSU == 'true' && ' [KSU]' || ' [MAGISK]' }}${{ github.event.inputs.NETHUNTER == 'true' && ' [NH]' || '' }} ${{ github.event.inputs.SUFFIX }}
+    name: "[MAGISK]${{ github.event.inputs.NETHUNTER == 'true' && ' [NH]' || '' }} ${{ github.event.inputs.SUFFIX }}"
     runs-on: ubuntu-latest
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
       CCACHE_NOHASHDIR: "true"
       CCACHE_HARDLINK: "true"
       CCACHE_MAXSIZE: 8G
-      NETHUNTER_ENABLED: ${{ github.event.inputs.NETHUNTER }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -82,14 +52,12 @@ jobs:
       - name: Show Build Configuration
         run: |
           echo "=============================================="
-          echo "  Zabixii Kernel Build v1.4.0"
+          echo "  Zabixii Kernel Build v1.5.0"
           echo "=============================================="
           echo "FILE: ${{ github.event.inputs.FILE }}"
           echo "SUFFIX: ${{ github.event.inputs.SUFFIX }}"
-          echo "KSU: ${{ github.event.inputs.KSU }}"
           echo "NETHUNTER: ${{ github.event.inputs.NETHUNTER }}"
-          echo "VFS: ${{ github.event.inputs.VFS }}"
-          echo "KPM: ${{ github.event.inputs.KPM }}"
+          echo "FAST_BUILD: ${{ github.event.inputs.FAST_BUILD }}"
           echo "=============================================="
 
       - name: Set Environment Variables
@@ -136,7 +104,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ runner.os }}-${{ github.event.inputs.FILE }}-v3
+          key: ccache-${{ runner.os }}-${{ github.event.inputs.FILE }}-v4
 
       - name: Initialize Ccache
         run: |
@@ -211,68 +179,6 @@ jobs:
           git add -A
           git commit -m "Custom suffix: $SUFFIX" || true
 
-      - name: Add SukiSU Ultra
-        if: ${{ github.event.inputs.KSU == 'true' }}
-        run: |
-          cd kernel_workspace/kernel-5.10
-          META="${{ github.event.inputs.KSU_META }}"
-          BRANCH_NAME="${META%%/*}"
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s "$BRANCH_NAME"
-
-      - name: Apply SukiSU Patches
-        if: ${{ github.event.inputs.KSU == 'true' }}
-        run: |
-          cd kernel_workspace
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}
-          git clone https://github.com/ShirkNeko/SukiSU_patch.git
-          cd kernel-5.10
-          cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch ./
-          cp ../susfs4ksu/kernel_patches/fs/* ./fs/
-          cp ../susfs4ksu/kernel_patches/include/linux/* ./include/linux/
-          patch -p1 < 50_add_susfs_in_gki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch || true
-          cp ../SukiSU_patch/69_hide_stuff.patch ./
-          patch -p1 -F 3 < 69_hide_stuff.patch || true
-
-      - name: Apply VFS Hooks
-        if: ${{ github.event.inputs.KSU == 'true' && github.event.inputs.VFS == 'true' }}
-        run: |
-          cd kernel_workspace/kernel-5.10
-          cp ../SukiSU_patch/hooks/syscall_hooks.patch ./
-          patch -p1 -F 3 < syscall_hooks.patch
-
-      - name: Add KSU Configuration
-        if: ${{ github.event.inputs.KSU == 'true' }}
-        run: |
-          cd kernel_workspace/kernel-5.10
-          cat >> arch/arm64/configs/gki_defconfig << 'EOF'
-          CONFIG_KSU=y
-          CONFIG_KSU_SUSFS=y
-          CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y
-          CONFIG_KSU_SUSFS_SUS_PATH=y
-          CONFIG_KSU_SUSFS_SUS_MOUNT=y
-          CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y
-          CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y
-          CONFIG_KSU_SUSFS_SUS_KSTAT=y
-          CONFIG_KSU_SUSFS_SUS_OVERLAYFS=n
-          CONFIG_KSU_SUSFS_TRY_UMOUNT=y
-          CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y
-          CONFIG_KSU_SUSFS_SPOOF_UNAME=y
-          CONFIG_KSU_SUSFS_ENABLE_LOG=y
-          CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
-          CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
-          CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
-          EOF
-          if [ "${{ github.event.inputs.KPM }}" = "true" ]; then
-            echo "CONFIG_KPM=y" >> arch/arm64/configs/gki_defconfig
-          fi
-          if [ "${{ github.event.inputs.VFS }}" = "true" ]; then
-            echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_MANUAL_HOOK=y" >> arch/arm64/configs/gki_defconfig
-          else
-            echo "CONFIG_KSU_SUSFS_SUS_SU=y" >> arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KPROBES=y" >> arch/arm64/configs/gki_defconfig
-          fi
-
       - name: Add Common Optimizations
         run: |
           cd kernel_workspace/kernel-5.10
@@ -284,9 +190,10 @@ jobs:
           CONFIG_NET_SCH_FQ=y
           EOF
           sed -i 's/check_defconfig//' ./build.config.gki
+          echo "Common optimizations added!"
 
       - name: NetHunter - Clone MT76 Driver
-        if: github.event.inputs.NETHUNTER == 'true'
+        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           echo "=============================================="
           echo "  NETHUNTER: Cloning MT76 Driver"
@@ -297,11 +204,9 @@ jobs:
           cd mediatek
           
           if [ -d "mt76" ]; then
-            echo "MT76 already exists, removing..."
             rm -rf mt76
           fi
           
-          echo "Cloning MT76..."
           git clone --depth=1 https://github.com/openwrt/mt76.git
           
           if [ ! -d "mt76" ]; then
@@ -313,17 +218,15 @@ jobs:
           ls -la mt76/
 
       - name: NetHunter - Fix MT76 Kconfig
-        if: github.event.inputs.NETHUNTER == 'true'
+        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           echo "=============================================="
           echo "  NETHUNTER: Fixing MT76 Kconfig"
           echo "=============================================="
           cd kernel_workspace/kernel-5.10/drivers/net/wireless/mediatek/mt76
           
-          # Fix deprecated syntax
           find . -name "Kconfig" -exec sed -i 's/---help---/help/g' {} \;
           
-          # Create simplified Kconfig
           cat > Kconfig << 'EOF'
           config MT76_CORE
           	tristate
@@ -358,73 +261,57 @@ jobs:
           EOF
           
           echo "Kconfig fixed!"
-          cat Kconfig
 
       - name: NetHunter - Integrate MT76 into Kernel
-        if: github.event.inputs.NETHUNTER == 'true'
+        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           echo "=============================================="
           echo "  NETHUNTER: Integrating MT76 into Kernel"
           echo "=============================================="
           cd kernel_workspace/kernel-5.10/drivers/net/wireless/mediatek
           
-          # Create mediatek Makefile
           cat > Makefile << 'EOF'
           obj-$(CONFIG_MT76_CORE) += mt76/
           EOF
           
-          # Create mediatek Kconfig
           cat > Kconfig << 'EOF'
           source "drivers/net/wireless/mediatek/mt76/Kconfig"
           EOF
           
           cd ..
           
-          # Add mediatek to wireless Makefile if not present
           if ! grep -q "mediatek" Makefile; then
             echo "obj-y += mediatek/" >> Makefile
-            echo "Added mediatek to wireless Makefile"
           fi
           
-          # Add mediatek to wireless Kconfig if not present
           if ! grep -q "mediatek" Kconfig; then
             echo 'source "drivers/net/wireless/mediatek/Kconfig"' >> Kconfig
-            echo "Added mediatek to wireless Kconfig"
           fi
           
           echo "Integration complete!"
-          echo "Wireless Makefile:"
-          cat Makefile
-          echo ""
-          echo "Wireless Kconfig:"
-          cat Kconfig
 
       - name: NetHunter - Add All Configs
-        if: github.event.inputs.NETHUNTER == 'true'
+        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           echo "=============================================="
           echo "  NETHUNTER: Adding All Configs"
           echo "=============================================="
           cd kernel_workspace/kernel-5.10
           
-          # Define all NetHunter configs
-          NETHUNTER_CONFIGS="
+          cat >> arch/arm64/configs/gki_defconfig << 'NHEOF'
           # NetHunter Marker
           CONFIG_IKCONFIG=y
           CONFIG_IKCONFIG_PROC=y
           CONFIG_MAGIC_SYSRQ=y
-          
-          # USB HID/BadUSB
+          # USB HID
           CONFIG_USB_CONFIGFS_F_HID=y
           CONFIG_USB_F_HID=y
-          
           # USB Serial
           CONFIG_USB_SERIAL_CH341=y
           CONFIG_USB_SERIAL_CP210X=y
           CONFIG_USB_SERIAL_FTDI_SIO=y
           CONFIG_USB_SERIAL_PL2303=y
-          
-          # Wireless Framework
+          # Wireless
           CONFIG_WIRELESS=y
           CONFIG_WIRELESS_EXT=y
           CONFIG_WEXT_CORE=y
@@ -435,26 +322,22 @@ jobs:
           CONFIG_MAC80211=y
           CONFIG_MAC80211_MESH=y
           CONFIG_RFKILL=y
-          
-          # MT76 Driver
+          # MT76
           CONFIG_MT76_CORE=y
           CONFIG_MT76_USB=y
           CONFIG_MT76x02_LIB=y
           CONFIG_MT76x02_USB=y
           CONFIG_MT76x2_COMMON=y
           CONFIG_MT76x2U=y
-          
           # Networking
           CONFIG_TUN=y
           CONFIG_VETH=y
           CONFIG_BRIDGE=y
           CONFIG_VLAN_8021Q=y
           CONFIG_MACVLAN=y
-          
           # Input
           CONFIG_INPUT_UINPUT=y
           CONFIG_UHID=y
-          
           # Netfilter
           CONFIG_NETFILTER_XT_TARGET_TPROXY=y
           CONFIG_NETFILTER_XT_TARGET_TEE=y
@@ -466,87 +349,93 @@ jobs:
           CONFIG_NETFILTER_XT_MATCH_MAC=y
           CONFIG_NETFILTER_XT_MATCH_IPRANGE=y
           CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y
-          
           # Namespaces
           CONFIG_NET_NS=y
           CONFIG_PID_NS=y
           CONFIG_IPC_NS=y
           CONFIG_UTS_NS=y
-          
           # Bluetooth
           CONFIG_BT_RFCOMM=y
           CONFIG_BT_RFCOMM_TTY=y
           CONFIG_BT_BNEP=y
           CONFIG_BT_HIDP=y
           CONFIG_BT_HCIBTUSB=y
-          
-          # PPP/VPN
+          # PPP
           CONFIG_PPP=y
           CONFIG_PPP_DEFLATE=y
           CONFIG_PPP_MPPE=y
           CONFIG_PPTP=y
           CONFIG_PPPOE=y
-          
           # Filesystems
           CONFIG_OVERLAY_FS=y
           CONFIG_SQUASHFS=y
           CONFIG_SQUASHFS_XZ=y
           CONFIG_SQUASHFS_LZO=y
-          
           # Crypto
           CONFIG_CRYPTO_USER_API_HASH=y
           CONFIG_CRYPTO_USER_API_SKCIPHER=y
-          "
+          NHEOF
           
-          # Add to gki_defconfig
-          echo "Adding to gki_defconfig..."
-          echo "$NETHUNTER_CONFIGS" >> arch/arm64/configs/gki_defconfig
-          
-          # Add to mgk_64_k510_defconfig
           if [ -f "arch/arm64/configs/mgk_64_k510_defconfig" ]; then
-            echo "Adding to mgk_64_k510_defconfig..."
-            echo "$NETHUNTER_CONFIGS" >> arch/arm64/configs/mgk_64_k510_defconfig
+            cat >> arch/arm64/configs/mgk_64_k510_defconfig << 'NHEOF'
+          CONFIG_IKCONFIG=y
+          CONFIG_IKCONFIG_PROC=y
+          CONFIG_MT76_CORE=y
+          CONFIG_MT76_USB=y
+          CONFIG_MT76x02_LIB=y
+          CONFIG_MT76x02_USB=y
+          CONFIG_MT76x2_COMMON=y
+          CONFIG_MT76x2U=y
+          CONFIG_CFG80211=y
+          CONFIG_MAC80211=y
+          NHEOF
           fi
           
-          # Add to oplus6983.config
           if [ -f "kernel/configs/oplus6983.config" ]; then
-            echo "Adding to oplus6983.config..."
-            echo "$NETHUNTER_CONFIGS" >> kernel/configs/oplus6983.config
+            cat >> kernel/configs/oplus6983.config << 'NHEOF'
+          CONFIG_IKCONFIG=y
+          CONFIG_IKCONFIG_PROC=y
+          CONFIG_MT76_CORE=y
+          CONFIG_MT76_USB=y
+          CONFIG_MT76x02_LIB=y
+          CONFIG_MT76x02_USB=y
+          CONFIG_MT76x2_COMMON=y
+          CONFIG_MT76x2U=y
+          CONFIG_CFG80211=y
+          CONFIG_MAC80211=y
+          NHEOF
           fi
           
-          echo "All configs added!"
+          echo "All NetHunter configs added!"
 
-      - name: NetHunter - Verify Patches Applied
-        if: github.event.inputs.NETHUNTER == 'true'
+      - name: NetHunter - Verify Patches
+        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           echo "=============================================="
-          echo "  NETHUNTER: Verifying Patches"
+          echo "  NETHUNTER: Verifying All Patches"
           echo "=============================================="
           cd kernel_workspace/kernel-5.10
           
           ERRORS=0
           
-          # Check MT76 driver exists
           if [ -d "drivers/net/wireless/mediatek/mt76" ]; then
-            echo "✅ MT76 driver directory exists"
+            echo "✅ MT76 driver exists"
           else
-            echo "❌ MT76 driver directory NOT found!"
+            echo "❌ MT76 driver NOT found!"
             ERRORS=$((ERRORS + 1))
           fi
           
-          # Check MT76 integrated in wireless Makefile
           if grep -q "mediatek" drivers/net/wireless/Makefile; then
-            echo "✅ MT76 integrated in wireless Makefile"
+            echo "✅ MT76 in wireless Makefile"
           else
-            echo "❌ MT76 NOT in wireless Makefile!"
+            echo "❌ MT76 NOT in Makefile!"
             ERRORS=$((ERRORS + 1))
           fi
           
-          # Check configs in gki_defconfig
           if grep -q "CONFIG_MT76x2U" arch/arm64/configs/gki_defconfig; then
-            echo "✅ MT76x2U config in gki_defconfig"
+            echo "✅ MT76x2U in gki_defconfig"
           else
-            echo "❌ MT76x2U config NOT in gki_defconfig!"
+            echo "❌ MT76x2U NOT in gki_defconfig!"
             ERRORS=$((ERRORS + 1))
           fi
           
@@ -557,16 +446,16 @@ jobs:
             ERRORS=$((ERRORS + 1))
           fi
           
-          # Show summary
-          echo ""
-          echo "=============================================="
           if [ $ERRORS -eq 0 ]; then
+            echo "=============================================="
             echo "  ✅ ALL PATCHES VERIFIED!"
+            echo "=============================================="
           else
+            echo "=============================================="
             echo "  ❌ $ERRORS ERRORS FOUND!"
+            echo "=============================================="
             exit 1
           fi
-          echo "=============================================="
 
       - name: Fix show_pad Error
         run: |
@@ -603,15 +492,10 @@ jobs:
       - name: Set Artifact Suffix
         id: suffix
         run: |
-          SUFFIX=""
-          if [ "${{ github.event.inputs.KSU }}" = "true" ]; then
-            SUFFIX="_KSU"
-            [ "${{ github.event.inputs.VFS }}" = "true" ] && SUFFIX="${SUFFIX}_VFS"
-            [ "${{ github.event.inputs.KPM }}" = "true" ] && SUFFIX="${SUFFIX}_KPM"
-          else
-            SUFFIX="_MAGISK"
+          SUFFIX="_MAGISK"
+          if [ "${{ github.event.inputs.NETHUNTER }}" = "true" ]; then
+            SUFFIX="${SUFFIX}_NH"
           fi
-          [ "${{ github.event.inputs.NETHUNTER }}" = "true" ] && SUFFIX="${SUFFIX}_NH"
           echo "value=${SUFFIX}" >> $GITHUB_OUTPUT
 
       - name: Upload Artifact
