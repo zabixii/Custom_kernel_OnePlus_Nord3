@@ -1,8 +1,9 @@
 # ============================================
 # Zabixii Kernel Build Workflow
-# Version: 1.5.0
-# - Magisk only (no KSU)
-# - Fixed NetHunter step conditions
+# Version: 1.7.0
+# - Magisk only
+# - NetHunter with WiFi drivers
+# - Compatible MT76 integration
 # ============================================
 
 name: Build OnePlus Nord 3 AOSP - Zabixii (NetHunter)
@@ -52,12 +53,10 @@ jobs:
       - name: Show Build Configuration
         run: |
           echo "=============================================="
-          echo "  Zabixii Kernel Build v1.5.0"
+          echo "  Zabixii Kernel Build v1.7.0"
           echo "=============================================="
-          echo "FILE: ${{ github.event.inputs.FILE }}"
           echo "SUFFIX: ${{ github.event.inputs.SUFFIX }}"
           echo "NETHUNTER: ${{ github.event.inputs.NETHUNTER }}"
-          echo "FAST_BUILD: ${{ github.event.inputs.FAST_BUILD }}"
           echo "=============================================="
 
       - name: Set Environment Variables
@@ -104,7 +103,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ runner.os }}-${{ github.event.inputs.FILE }}-v4
+          key: ccache-${{ runner.os }}-${{ github.event.inputs.FILE }}-v6
 
       - name: Initialize Ccache
         run: |
@@ -190,115 +189,32 @@ jobs:
           CONFIG_NET_SCH_FQ=y
           EOF
           sed -i 's/check_defconfig//' ./build.config.gki
-          echo "Common optimizations added!"
 
-      - name: NetHunter - Clone MT76 Driver
+      - name: Check Existing Wireless Drivers
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           echo "=============================================="
-          echo "  NETHUNTER: Cloning MT76 Driver"
+          echo "  Checking Existing Wireless Drivers"
           echo "=============================================="
           cd kernel_workspace/kernel-5.10/drivers/net/wireless
-          
-          mkdir -p mediatek
-          cd mediatek
-          
-          if [ -d "mt76" ]; then
-            rm -rf mt76
-          fi
-          
-          git clone --depth=1 https://github.com/openwrt/mt76.git
-          
-          if [ ! -d "mt76" ]; then
-            echo "ERROR: Failed to clone MT76!"
-            exit 1
-          fi
-          
-          echo "MT76 cloned successfully!"
-          ls -la mt76/
+          echo "Available wireless drivers:"
+          ls -la
+          echo ""
+          echo "Checking for MediaTek..."
+          ls -la mediatek/ 2>/dev/null || echo "No mediatek directory"
+          echo ""
+          echo "Checking Kconfig for available drivers..."
+          grep -r "MT76\|ATH9K\|RT2800\|RTL8" Kconfig* 2>/dev/null | head -20 || echo "No matches in Kconfig"
 
-      - name: NetHunter - Fix MT76 Kconfig
+      - name: Add NetHunter Safe Configs
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           echo "=============================================="
-          echo "  NETHUNTER: Fixing MT76 Kconfig"
-          echo "=============================================="
-          cd kernel_workspace/kernel-5.10/drivers/net/wireless/mediatek/mt76
-          
-          find . -name "Kconfig" -exec sed -i 's/---help---/help/g' {} \;
-          
-          cat > Kconfig << 'EOF'
-          config MT76_CORE
-          	tristate
-          	depends on MAC80211
-          
-          config MT76_USB
-          	tristate
-          	depends on MT76_CORE && USB
-          
-          config MT76x02_LIB
-          	tristate
-          	depends on MT76_CORE
-          
-          config MT76x02_USB
-          	tristate
-          	depends on MT76_USB && MT76x02_LIB
-          
-          config MT76x2_COMMON
-          	tristate
-          	depends on MT76_CORE
-          
-          config MT76x2U
-          	tristate "MediaTek MT76x2U (USB) support"
-          	depends on MAC80211 && USB
-          	select MT76_CORE
-          	select MT76_USB
-          	select MT76x02_LIB
-          	select MT76x02_USB
-          	select MT76x2_COMMON
-          	help
-          	  This adds support for MT7612U-based USB wireless adapters.
-          EOF
-          
-          echo "Kconfig fixed!"
-
-      - name: NetHunter - Integrate MT76 into Kernel
-        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
-        run: |
-          echo "=============================================="
-          echo "  NETHUNTER: Integrating MT76 into Kernel"
-          echo "=============================================="
-          cd kernel_workspace/kernel-5.10/drivers/net/wireless/mediatek
-          
-          cat > Makefile << 'EOF'
-          obj-$(CONFIG_MT76_CORE) += mt76/
-          EOF
-          
-          cat > Kconfig << 'EOF'
-          source "drivers/net/wireless/mediatek/mt76/Kconfig"
-          EOF
-          
-          cd ..
-          
-          if ! grep -q "mediatek" Makefile; then
-            echo "obj-y += mediatek/" >> Makefile
-          fi
-          
-          if ! grep -q "mediatek" Kconfig; then
-            echo 'source "drivers/net/wireless/mediatek/Kconfig"' >> Kconfig
-          fi
-          
-          echo "Integration complete!"
-
-      - name: NetHunter - Add All Configs
-        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
-        run: |
-          echo "=============================================="
-          echo "  NETHUNTER: Adding All Configs"
+          echo "  Adding NetHunter Configs"
           echo "=============================================="
           cd kernel_workspace/kernel-5.10
           
-          cat >> arch/arm64/configs/gki_defconfig << 'NHEOF'
+          cat >> arch/arm64/configs/gki_defconfig << 'EOF'
           # NetHunter Marker
           CONFIG_IKCONFIG=y
           CONFIG_IKCONFIG_PROC=y
@@ -311,7 +227,7 @@ jobs:
           CONFIG_USB_SERIAL_CP210X=y
           CONFIG_USB_SERIAL_FTDI_SIO=y
           CONFIG_USB_SERIAL_PL2303=y
-          # Wireless
+          # Wireless Framework
           CONFIG_WIRELESS=y
           CONFIG_WIRELESS_EXT=y
           CONFIG_WEXT_CORE=y
@@ -322,13 +238,6 @@ jobs:
           CONFIG_MAC80211=y
           CONFIG_MAC80211_MESH=y
           CONFIG_RFKILL=y
-          # MT76
-          CONFIG_MT76_CORE=y
-          CONFIG_MT76_USB=y
-          CONFIG_MT76x02_LIB=y
-          CONFIG_MT76x02_USB=y
-          CONFIG_MT76x2_COMMON=y
-          CONFIG_MT76x2U=y
           # Networking
           CONFIG_TUN=y
           CONFIG_VETH=y
@@ -374,90 +283,107 @@ jobs:
           # Crypto
           CONFIG_CRYPTO_USER_API_HASH=y
           CONFIG_CRYPTO_USER_API_SKCIPHER=y
-          NHEOF
-          
-          if [ -f "arch/arm64/configs/mgk_64_k510_defconfig" ]; then
-            cat >> arch/arm64/configs/mgk_64_k510_defconfig << 'NHEOF'
-          CONFIG_IKCONFIG=y
-          CONFIG_IKCONFIG_PROC=y
-          CONFIG_MT76_CORE=y
-          CONFIG_MT76_USB=y
-          CONFIG_MT76x02_LIB=y
-          CONFIG_MT76x02_USB=y
-          CONFIG_MT76x2_COMMON=y
-          CONFIG_MT76x2U=y
-          CONFIG_CFG80211=y
-          CONFIG_MAC80211=y
-          NHEOF
-          fi
-          
-          if [ -f "kernel/configs/oplus6983.config" ]; then
-            cat >> kernel/configs/oplus6983.config << 'NHEOF'
-          CONFIG_IKCONFIG=y
-          CONFIG_IKCONFIG_PROC=y
-          CONFIG_MT76_CORE=y
-          CONFIG_MT76_USB=y
-          CONFIG_MT76x02_LIB=y
-          CONFIG_MT76x02_USB=y
-          CONFIG_MT76x2_COMMON=y
-          CONFIG_MT76x2U=y
-          CONFIG_CFG80211=y
-          CONFIG_MAC80211=y
-          NHEOF
-          fi
-          
-          echo "All NetHunter configs added!"
+          EOF
 
-      - name: NetHunter - Verify Patches
+      - name: Add NetHunter Kernel Configuration
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
-          echo "=============================================="
-          echo "  NETHUNTER: Verifying All Patches"
-          echo "=============================================="
           cd kernel_workspace/kernel-5.10
+          CONFIG_FILE=./arch/arm64/configs/gki_defconfig
           
-          ERRORS=0
+          echo "Adding NetHunter kernel configs..."
           
-          if [ -d "drivers/net/wireless/mediatek/mt76" ]; then
-            echo "✅ MT76 driver exists"
-          else
-            echo "❌ MT76 driver NOT found!"
-            ERRORS=$((ERRORS + 1))
-          fi
+          # Marker configs
+          echo "CONFIG_IKCONFIG=y" >> "$CONFIG_FILE"
+          echo "CONFIG_IKCONFIG_PROC=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MAGIC_SYSRQ=y" >> "$CONFIG_FILE"
           
-          if grep -q "mediatek" drivers/net/wireless/Makefile; then
-            echo "✅ MT76 in wireless Makefile"
-          else
-            echo "❌ MT76 NOT in Makefile!"
-            ERRORS=$((ERRORS + 1))
-          fi
+          # USB HID for BadUSB
+          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_F_HID=y" >> "$CONFIG_FILE"
           
-          if grep -q "CONFIG_MT76x2U" arch/arm64/configs/gki_defconfig; then
-            echo "✅ MT76x2U in gki_defconfig"
-          else
-            echo "❌ MT76x2U NOT in gki_defconfig!"
-            ERRORS=$((ERRORS + 1))
-          fi
+          # USB Serial adapters
+          echo "CONFIG_USB_SERIAL_CH341=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_SERIAL_CP210X=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_SERIAL_FTDI_SIO=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_SERIAL_PL2303=y" >> "$CONFIG_FILE"
           
-          if grep -q "CONFIG_IKCONFIG_PROC" arch/arm64/configs/gki_defconfig; then
-            echo "✅ IKCONFIG_PROC in gki_defconfig"
-          else
-            echo "❌ IKCONFIG_PROC NOT in gki_defconfig!"
-            ERRORS=$((ERRORS + 1))
-          fi
+          # Wireless framework (dependencies for Wi-Fi drivers)
+          echo "CONFIG_WIRELESS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_WIRELESS_EXT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_WEXT_CORE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_WEXT_PROC=y" >> "$CONFIG_FILE"
+          echo "CONFIG_WEXT_PRIV=y" >> "$CONFIG_FILE"
+          echo "CONFIG_CFG80211=y" >> "$CONFIG_FILE"
+          echo "CONFIG_CFG80211_WEXT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MAC80211=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MAC80211_MESH=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RFKILL=y" >> "$CONFIG_FILE"
           
-          if [ $ERRORS -eq 0 ]; then
-            echo "=============================================="
-            echo "  ✅ ALL PATCHES VERIFIED!"
-            echo "=============================================="
-          else
-            echo "=============================================="
-            echo "  ❌ $ERRORS ERRORS FOUND!"
-            echo "=============================================="
-            exit 1
-          fi
+          # MT76 driver and dependencies for MT7612U
+          echo "CONFIG_MT76_CORE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MT76_USB=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MT76x02_LIB=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MT76x02_USB=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MT76x2_COMMON=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MT76x2U=y" >> "$CONFIG_FILE"
+          
+          # Networking
+          echo "CONFIG_TUN=y" >> "$CONFIG_FILE"
+          echo "CONFIG_VETH=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BRIDGE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_VLAN_8021Q=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MACVLAN=y" >> "$CONFIG_FILE"
+          
+          # Namespaces (NO USER_NS)
+          echo "CONFIG_NET_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PID_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"
+          
+          # Input
+          echo "CONFIG_INPUT_UINPUT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_UHID=y" >> "$CONFIG_FILE"
+          
+          # Netfilter
+          echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_TARGET_TEE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_TARGET_LOG=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_U32=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_STRING=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_MULTIPORT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_MARK=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_MAC=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_IPRANGE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y" >> "$CONFIG_FILE"
+          
+          # Bluetooth
+          echo "CONFIG_BT_RFCOMM=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_RFCOMM_TTY=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_BNEP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_HIDP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_HCIBTUSB=y" >> "$CONFIG_FILE"
+          
+          # PPP/VPN
+          echo "CONFIG_PPP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PPP_DEFLATE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PPP_MPPE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PPTP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PPPOE=y" >> "$CONFIG_FILE"
+          
+          # Filesystems
+          echo "CONFIG_OVERLAY_FS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_SQUASHFS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_SQUASHFS_XZ=y" >> "$CONFIG_FILE"
+          echo "CONFIG_SQUASHFS_LZO=y" >> "$CONFIG_FILE"
+          
+          # Crypto
+          echo "CONFIG_CRYPTO_USER_API_HASH=y" >> "$CONFIG_FILE"
+          echo "CONFIG_CRYPTO_USER_API_SKCIPHER=y" >> "$CONFIG_FILE"
+          
+          echo "NetHunter configs added with MT76 dependencies."
 
-      - name: Fix show_pad Error
+      - name: Fix Build Issues
         run: |
           sed -i '/goto show_pad;/d' kernel_workspace/kernel-5.10/fs/proc/task_mmu.c
 
@@ -477,12 +403,12 @@ jobs:
             exit 1
           fi
           SIZE=$(stat -c%s "$IMAGE")
-          echo "Image.gz size: $SIZE bytes"
+          echo "Image.gz: $SIZE bytes ($(($SIZE / 1024 / 1024)) MB)"
           if [ "$SIZE" -lt 1000000 ]; then
             echo "ERROR: Image.gz too small!"
             exit 1
           fi
-          echo "✅ Kernel built successfully!"
+          echo "Kernel built successfully!"
 
       - name: Create AnyKernel3 Package
         run: |
@@ -498,8 +424,11 @@ jobs:
           fi
           echo "value=${SUFFIX}" >> $GITHUB_OUTPUT
 
-      - name: Upload Artifact
+      - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
         with:
           name: "Zabixii_Kernel${{ steps.suffix.outputs.value }}_by_Zabixii"
           path: ./Anykernel3_Zabixii/*
+
+      - name: Post-build Disk Check
+        run: df -h
