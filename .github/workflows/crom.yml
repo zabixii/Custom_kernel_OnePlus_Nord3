@@ -1,4 +1,9 @@
-name: Build OnePlus Nord 3 AOSP - Zabixii (NetHunter)
+# ============================================
+# Zabixii Kernel Build Workflow
+# Version: 1.2.0
+# ============================================
+
+name: Build OnePlus Nord 3 AOSP - Zabixii⚡ (NetHunter)
 
 on:
   workflow_dispatch:
@@ -116,9 +121,6 @@ jobs:
             echo "BUILD_METHOD=gki" >> $GITHUB_ENV
           fi
 
-      - name: Check Disk Space
-        run: df -h
-
       - name: Maximize Build Space
         uses: easimon/maximize-build-space@master
         with:
@@ -129,14 +131,13 @@ jobs:
           remove-haskell: 'true'
           remove-codeql: 'true'
 
-      - name: Create and Enable 3G Swap
+      - name: Create Swap
         run: |
           sudo swapoff -a
           sudo fallocate -l 3G /swapfile
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
-          free -h
 
       - name: Set Cache Environment
         run: |
@@ -148,50 +149,21 @@ jobs:
           git config --global user.name "hemasai1109"
           git config --global user.email "pandunelluri.1109@gmail.com"
 
-      - name: Configure APT Cache
-        run: |
-          APT_CACHE_DIR="$HOME/apt-cache"
-          mkdir -p "$APT_CACHE_DIR"/{archives,lists/partial}
-          echo "Dir::Cache \"$APT_CACHE_DIR\";" | sudo tee /etc/apt/apt.conf.d/90user-cache
-          echo "Dir::Cache::archives \"$APT_CACHE_DIR/archives\";" | sudo tee -a /etc/apt/apt.conf.d/90user-cache
-          echo "Dir::State::lists \"$APT_CACHE_DIR/lists\";" | sudo tee -a /etc/apt/apt.conf.d/90user-cache
-          sudo chown -R $USER:$USER "$APT_CACHE_DIR"
-
-      - name: Set APT Cache
-        uses: actions/cache@v3
-        with:
-          path: ${{ env.HOME }}/apt-cache
-          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/crom.yml') }}
-          restore-keys: ${{ runner.os }}-apt-
-
       - name: Install Dependencies
         run: |
-          sudo rm -f /var/lib/apt/lists/lock /var/lib/dpkg/lock
-          APT_CACHE_DIR="$HOME/apt-cache"
-          mkdir -p "$APT_CACHE_DIR/lists/partial"
-          sudo apt -o Dir::Cache="$APT_CACHE_DIR" update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt -o Dir::Cache="$APT_CACHE_DIR" install -yq --no-install-recommends \
-            python3 git curl ccache libelf-dev build-essential flex bison libssl-dev \
-            libncurses-dev liblz4-tool zlib1g-dev libxml2-utils rsync unzip
-          sudo apt install -y libelf-dev ccache llvm lld
           sudo apt update -qq
+          sudo apt install -y python3 git curl ccache libelf-dev build-essential flex bison libssl-dev libncurses-dev liblz4-tool zlib1g-dev libxml2-utils rsync unzip llvm lld
 
       - name: Restore Ccache
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ runner.os }}-${{ github.ref_name }}-${{ github.event.inputs.FILE }}-${{ env.BUILD_METHOD }}-${{ github.event.inputs.FAST_BUILD == 'true' && 'fast' || 'normal' }}-16
+          key: ccache-${{ runner.os }}-${{ github.event.inputs.FILE }}-${{ github.event.inputs.NETHUNTER }}-v1
 
       - name: Initialize Ccache
         run: |
-          INIT_FLAG="${{ env.CCACHE_DIR }}/.ccache_initialized"
-          if command -v ccache >/dev/null 2>&1; then
-            if [ ! -f "$INIT_FLAG" ]; then
-              mkdir -p "${{ env.CCACHE_DIR }}"
-              ccache -M ${{ env.CCACHE_MAXSIZE }}
-              touch "$INIT_FLAG"
-            fi
-          fi
+          mkdir -p "${{ env.CCACHE_DIR }}"
+          ccache -M ${{ env.CCACHE_MAXSIZE }}
           ccache -s
 
       - name: Install Repo Tool
@@ -206,74 +178,65 @@ jobs:
           repo init -u https://github.com/hemasai1109/Custom_kernel_OnePlus_Nord3.git -m ${{ github.event.inputs.FILE }}.xml --depth=1
           repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle --force-sync
 
-      - name: Copy and Rename Build Configuration
+      - name: Copy Build Configuration
         run: |
           git clone https://github.com/hemasai1109/Custom_kernel_OnePlus_Nord3.git kernel_workflow
-          cp -v kernel_workflow/build.config.oplus6983-d kernel_workspace/kernel-5.10/
+          cp kernel_workflow/build.config.oplus6983-d kernel_workspace/kernel-5.10/
           cd kernel_workspace/kernel-5.10
           mv build.config.oplus6983-d build.config.oplus6983
-          ls -ls build.config.oplus6983
 
       - name: Set Build Config Path
         run: echo "BUILD_CONFIG=kernel-5.10/build.config.oplus6983" >> $GITHUB_ENV
 
-      - name: Fix Vendor Directory Structure
+      - name: Fix Vendor Directory
         run: |
           cd kernel_workspace
           mv kernel_module/vendor .
-          cd ..
           rm -rf kernel_module
 
       - name: Create Thermal Makefile
         run: |
           cd kernel_workspace/vendor/oplus/kernel/cpu/thermal
-          touch Makefile
           echo "obj-y += horae_shell_temp" > Makefile
           echo "obj-y += oplus_ipa_thermal" >> Makefile
 
       - name: Create Fingerprint Makefile
         run: |
           cd kernel_workspace/vendor/oplus/secure/biometrics/fingerprints/bsp/drivers_kernel/component3.0/mtk
-          rm -f Makefile
           cat > Makefile << 'EOF'
           obj-$(CONFIG_OPLUS_FINGERPRINT_COMMON) += oplus_fp_common/
           ifneq ($(CONFIG_OPLUS_FINGERPRINT_GOODIX)_$(CONFIG_OPLUS_FINGERPRINT_GOODIX_OPTICAL), _)
           obj-y += goodix_optical_fp/
           endif
-          obj-$(CONFIG_OPLUS_FINGERPRINT_JIIOV_OPTICAL)  += anc_driver/
-          obj-$(CONFIG_OPLUS_FINGERPRINT_SILEAD_CAP)  += silead/
+          obj-$(CONFIG_OPLUS_FINGERPRINT_JIIOV_OPTICAL) += anc_driver/
+          obj-$(CONFIG_OPLUS_FINGERPRINT_SILEAD_CAP) += silead/
           ccflags-$(CONFIG_OPLUS_FINGERPRINT_NAVIGATION_ENABLE) += -DFP_NAVIGATION_ENABLE
           EOF
 
-      - name: Fix Audio Codec Conflict
+      - name: Fix Audio Codec
         run: |
           cd kernel_workspace/kernel-5.10/sound/soc/codecs/
           sed -i 's/^int accdet_read_audio_res(unsigned int res_value)/int mt6357_accdet_read_audio_res(unsigned int res_value)/' mt6357-accdet.c
           sed -i 's/^EXPORT_SYMBOL(accdet_read_audio_res);/EXPORT_SYMBOL(mt6357_accdet_read_audio_res);/' mt6357-accdet.c
 
-      - name: Apply Custom Kernel Suffix
+      - name: Apply Custom Suffix
         if: ${{ github.event.inputs.SUFFIX != '' }}
         run: |
           cd kernel_workspace
           SUFFIX="${{ github.event.inputs.SUFFIX }}"
           ANDROID_VERSION="${{ env.ANDROID_VERSION }}"
-          FAST_BUILD="${{ github.event.inputs.FAST_BUILD }}"
           for path in kernel-${{ env.KERNEL_VERSION }}/scripts/setlocalversion; do
             [ -f "$path" ] || continue
             sed -i 's/ -dirty//g' "$path"
             sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$path"
             if grep -q 'echo "\$res"' "$path"; then
-              if [ "$FAST_BUILD" = "true" ]; then
-                sed -i "s/^res=.*/res=\"-${ANDROID_VERSION}-${SUFFIX}\"/" "$path"
-              else
-                tac "$path" | sed "0,/echo \"\\\$res\"/s//res=\\\$(echo \\\$res | cut -d- -f1-2)-${SUFFIX}; echo \"\\\$res\";/" | tac > "$path.tmp" && mv "$path.tmp" "$path"
-              fi
+              sed -i "s/^res=.*/res=\"-${ANDROID_VERSION}-${SUFFIX}\"/" "$path"
             fi
             chmod +x "$path"
           done
           cd kernel-${{ env.KERNEL_VERSION }}
           git add -A
-          git commit -m "Custom suffix: $SUFFIX"
+          git commit -m "Custom suffix: $SUFFIX" || true
 
       - name: Add SukiSU Ultra
         if: ${{ github.event.inputs.KSU == 'true' }}
@@ -281,23 +244,9 @@ jobs:
           cd kernel_workspace/kernel-5.10
           META="${{ github.event.inputs.KSU_META }}"
           BRANCH_NAME="${META%%/*}"
-          CUSTOM_TAG="${META#*/}"
           curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s "$BRANCH_NAME"
-          cd ./KernelSU
-          KSU_API_VERSION=$(curl -fsSL "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/$BRANCH_NAME/kernel/Makefile" | \
-            grep -m1 "KSU_VERSION_API :=" | awk -F'= ' '{print $2}' | tr -d '[:space:]')
-          [[ -z "$KSU_API_VERSION" ]] && KSU_API_VERSION="3.1.7"
-          echo "KSU_API_VERSION=$KSU_API_VERSION" >> $GITHUB_ENV
-          KSU_VERSION_FULL="v$KSU_API_VERSION-$CUSTOM_TAG@$BRANCH_NAME"
-          echo "KSU_VERSION_FULL=$KSU_VERSION_FULL" >> $GITHUB_ENV
-          sed -i '/KSU_VERSION_API :=/d' kernel/Makefile
-          sed -i '/KSU_VERSION_FULL :=/d' kernel/Makefile
-          echo "KSU_VERSION_API := $KSU_API_VERSION" >> kernel/Makefile
-          echo "KSU_VERSION_FULL := $KSU_VERSION_FULL" >> kernel/Makefile
-          KSU_VERSION=$(expr $(git rev-list --count main 2>/dev/null || echo 13000) + 10700)
-          echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
 
-      - name: Apply Patches SukiSU Ultra
+      - name: Apply SukiSU Patches
         if: ${{ github.event.inputs.KSU == 'true' }}
         run: |
           cd kernel_workspace
@@ -308,13 +257,8 @@ jobs:
           cp ../susfs4ksu/kernel_patches/fs/* ./fs/
           cp ../susfs4ksu/kernel_patches/include/linux/* ./include/linux/
           patch -p1 < 50_add_susfs_in_gki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch || true
-
-      - name: Apply Hide Stuff Patches
-        if: ${{ github.event.inputs.KSU == 'true' }}
-        run: |
-          cd kernel_workspace/kernel-5.10
           cp ../SukiSU_patch/69_hide_stuff.patch ./
-          patch -p1 -F 3 < 69_hide_stuff.patch
+          patch -p1 -F 3 < 69_hide_stuff.patch || true
 
       - name: Apply VFS Hooks
         if: ${{ github.event.inputs.KSU == 'true' && github.event.inputs.VFS == 'true' }}
@@ -327,161 +271,177 @@ jobs:
         if: ${{ github.event.inputs.KSU == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10
-          CONFIG_FILE=./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU=y" >> "$CONFIG_FILE"
+          echo "CONFIG_KSU=y" >> arch/arm64/configs/gki_defconfig
           if [ "${{ github.event.inputs.KPM }}" = "true" ]; then
-            echo "CONFIG_KPM=y" >> "$CONFIG_FILE"
+            echo "CONFIG_KPM=y" >> arch/arm64/configs/gki_defconfig
           fi
           if [ "${{ github.event.inputs.VFS }}" = "true" ]; then
-            echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> "$CONFIG_FILE"
-            echo "CONFIG_KSU_MANUAL_HOOK=y" >> "$CONFIG_FILE"
+            echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> arch/arm64/configs/gki_defconfig
+            echo "CONFIG_KSU_MANUAL_HOOK=y" >> arch/arm64/configs/gki_defconfig
           else
-            echo "CONFIG_KSU_SUSFS_SUS_SU=y" >> "$CONFIG_FILE"
-            echo "CONFIG_KPROBES=y" >> "$CONFIG_FILE"
+            echo "CONFIG_KSU_SUSFS_SUS_SU=y" >> arch/arm64/configs/gki_defconfig
+            echo "CONFIG_KPROBES=y" >> arch/arm64/configs/gki_defconfig
           fi
-          echo "CONFIG_KSU_SUSFS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=n" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_TRY_UMOUNT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_KSU_SUSFS=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=n" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_TRY_UMOUNT=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> arch/arm64/configs/gki_defconfig
 
-      - name: Add Common Kernel Optimizations
+      - name: Add Common Optimizations
         run: |
           cd kernel_workspace/kernel-5.10
-          CONFIG_FILE=./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TMPFS_XATTR=y" >> "$CONFIG_FILE"
-          echo "CONFIG_TMPFS_POSIX_ACL=y" >> "$CONFIG_FILE"
-          echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$CONFIG_FILE"
-          echo "CONFIG_TCP_CONG_BBR=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NET_SCH_FQ=y" >> "$CONFIG_FILE"
-          echo "CONFIG_TCP_CONG_BIC=n" >> "$CONFIG_FILE"
-          echo "CONFIG_TCP_CONG_WESTWOOD=n" >> "$CONFIG_FILE"
-          echo "CONFIG_TCP_CONG_HTCP=n" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_ECN=y" >> "$CONFIG_FILE"
-          echo "CONFIG_TCP_ECN=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IPV6_ECN=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_TARGET_ECN=y" >> "$CONFIG_FILE"
+          echo "CONFIG_TMPFS_XATTR=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TMPFS_POSIX_ACL=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TCP_CONG_ADVANCED=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TCP_CONG_BBR=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_NET_SCH_FQ=y" >> arch/arm64/configs/gki_defconfig
           sed -i 's/check_defconfig//' ./build.config.gki
 
-      - name: Add NetHunter Kernel Configuration
+      - name: Create NetHunter Config Injection Script
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           cd kernel_workspace/kernel-5.10
-          CONFIG_FILE=./arch/arm64/configs/gki_defconfig
+          cat > nethunter_inject.sh << 'NHEOF'
+          #!/bin/bash
+          CONFIG_PATH="$1"
+          if [ ! -f "$CONFIG_PATH" ]; then
+            echo "Config not found: $CONFIG_PATH"
+            exit 0
+          fi
+          echo "Injecting NetHunter configs into: $CONFIG_PATH"
           
-          echo "Adding NetHunter kernel configs..."
+          # Use scripts/config to enable options
+          SCRIPTS_CONFIG="./scripts/config --file $CONFIG_PATH"
           
-          # Marker configs
-          echo "CONFIG_IKCONFIG=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IKCONFIG_PROC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MAGIC_SYSRQ=y" >> "$CONFIG_FILE"
+          # Marker
+          $SCRIPTS_CONFIG --enable CONFIG_IKCONFIG
+          $SCRIPTS_CONFIG --enable CONFIG_IKCONFIG_PROC
+          $SCRIPTS_CONFIG --enable CONFIG_MAGIC_SYSRQ
           
-          # USB HID for BadUSB
-          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_F_HID=y" >> "$CONFIG_FILE"
+          # USB HID
+          $SCRIPTS_CONFIG --enable CONFIG_USB_CONFIGFS_F_HID
+          $SCRIPTS_CONFIG --enable CONFIG_USB_F_HID
           
-          # USB Serial adapters
-          echo "CONFIG_USB_SERIAL_CH341=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_SERIAL_CP210X=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_SERIAL_FTDI_SIO=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_SERIAL_PL2303=y" >> "$CONFIG_FILE"
+          # USB Serial
+          $SCRIPTS_CONFIG --enable CONFIG_USB_SERIAL_CH341
+          $SCRIPTS_CONFIG --enable CONFIG_USB_SERIAL_CP210X
+          $SCRIPTS_CONFIG --enable CONFIG_USB_SERIAL_FTDI_SIO
+          $SCRIPTS_CONFIG --enable CONFIG_USB_SERIAL_PL2303
           
-          # Wireless framework (dependencies for Wi-Fi drivers)
-          echo "CONFIG_WIRELESS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_WIRELESS_EXT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_WEXT_CORE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_WEXT_PROC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_WEXT_PRIV=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CFG80211=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CFG80211_WEXT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MAC80211=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MAC80211_MESH=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RFKILL=y" >> "$CONFIG_FILE"
+          # Wireless framework
+          $SCRIPTS_CONFIG --enable CONFIG_WIRELESS
+          $SCRIPTS_CONFIG --enable CONFIG_WIRELESS_EXT
+          $SCRIPTS_CONFIG --enable CONFIG_WEXT_CORE
+          $SCRIPTS_CONFIG --enable CONFIG_WEXT_PROC
+          $SCRIPTS_CONFIG --enable CONFIG_WEXT_PRIV
+          $SCRIPTS_CONFIG --enable CONFIG_CFG80211
+          $SCRIPTS_CONFIG --enable CONFIG_CFG80211_WEXT
+          $SCRIPTS_CONFIG --enable CONFIG_MAC80211
+          $SCRIPTS_CONFIG --enable CONFIG_MAC80211_MESH
+          $SCRIPTS_CONFIG --enable CONFIG_RFKILL
           
-          # MT76 driver and dependencies for MT7612U
-          echo "CONFIG_MT76_CORE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MT76_USB=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MT76x02_LIB=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MT76x02_USB=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MT76x2_COMMON=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MT76x2U=y" >> "$CONFIG_FILE"
+          # MT76 driver
+          $SCRIPTS_CONFIG --enable CONFIG_MT76_CORE
+          $SCRIPTS_CONFIG --enable CONFIG_MT76_USB
+          $SCRIPTS_CONFIG --enable CONFIG_MT76x02_LIB
+          $SCRIPTS_CONFIG --enable CONFIG_MT76x02_USB
+          $SCRIPTS_CONFIG --enable CONFIG_MT76x2_COMMON
+          $SCRIPTS_CONFIG --enable CONFIG_MT76x2U
           
           # Networking
-          echo "CONFIG_TUN=y" >> "$CONFIG_FILE"
-          echo "CONFIG_VETH=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BRIDGE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_VLAN_8021Q=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MACVLAN=y" >> "$CONFIG_FILE"
-          
-          # Namespaces (NO USER_NS)
-          echo "CONFIG_NET_NS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PID_NS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"
+          $SCRIPTS_CONFIG --enable CONFIG_TUN
+          $SCRIPTS_CONFIG --enable CONFIG_VETH
+          $SCRIPTS_CONFIG --enable CONFIG_BRIDGE
+          $SCRIPTS_CONFIG --enable CONFIG_VLAN_8021Q
+          $SCRIPTS_CONFIG --enable CONFIG_MACVLAN
           
           # Input
-          echo "CONFIG_INPUT_UINPUT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_UHID=y" >> "$CONFIG_FILE"
+          $SCRIPTS_CONFIG --enable CONFIG_INPUT_UINPUT
+          $SCRIPTS_CONFIG --enable CONFIG_UHID
           
           # Netfilter
-          echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_TARGET_TEE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_TARGET_LOG=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_U32=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_STRING=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_MULTIPORT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_MARK=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_MAC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_IPRANGE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y" >> "$CONFIG_FILE"
+          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_TARGET_TPROXY
+          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_TARGET_TEE
+          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_TARGET_LOG
+          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_MATCH_U32
+          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_MATCH_STRING
+          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_MATCH_MULTIPORT
+          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_MATCH_MARK
+          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_MATCH_MAC
+          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_MATCH_IPRANGE
+          $SCRIPTS_CONFIG --enable CONFIG_NETFILTER_XT_MATCH_CONNTRACK
+          
+          # Namespaces
+          $SCRIPTS_CONFIG --enable CONFIG_NET_NS
+          $SCRIPTS_CONFIG --enable CONFIG_PID_NS
+          $SCRIPTS_CONFIG --enable CONFIG_IPC_NS
+          $SCRIPTS_CONFIG --enable CONFIG_UTS_NS
           
           # Bluetooth
-          echo "CONFIG_BT_RFCOMM=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_RFCOMM_TTY=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_BNEP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_HIDP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_HCIBTUSB=y" >> "$CONFIG_FILE"
+          $SCRIPTS_CONFIG --enable CONFIG_BT_RFCOMM
+          $SCRIPTS_CONFIG --enable CONFIG_BT_RFCOMM_TTY
+          $SCRIPTS_CONFIG --enable CONFIG_BT_BNEP
+          $SCRIPTS_CONFIG --enable CONFIG_BT_HIDP
+          $SCRIPTS_CONFIG --enable CONFIG_BT_HCIBTUSB
           
-          # PPP/VPN
-          echo "CONFIG_PPP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPP_DEFLATE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPP_MPPE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPTP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPPOE=y" >> "$CONFIG_FILE"
+          # PPP
+          $SCRIPTS_CONFIG --enable CONFIG_PPP
+          $SCRIPTS_CONFIG --enable CONFIG_PPP_DEFLATE
+          $SCRIPTS_CONFIG --enable CONFIG_PPP_MPPE
+          $SCRIPTS_CONFIG --enable CONFIG_PPTP
+          $SCRIPTS_CONFIG --enable CONFIG_PPPOE
           
           # Filesystems
-          echo "CONFIG_OVERLAY_FS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_SQUASHFS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_SQUASHFS_XZ=y" >> "$CONFIG_FILE"
-          echo "CONFIG_SQUASHFS_LZO=y" >> "$CONFIG_FILE"
+          $SCRIPTS_CONFIG --enable CONFIG_OVERLAY_FS
+          $SCRIPTS_CONFIG --enable CONFIG_SQUASHFS
+          $SCRIPTS_CONFIG --enable CONFIG_SQUASHFS_XZ
+          $SCRIPTS_CONFIG --enable CONFIG_SQUASHFS_LZO
           
           # Crypto
-          echo "CONFIG_CRYPTO_USER_API_HASH=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CRYPTO_USER_API_SKCIPHER=y" >> "$CONFIG_FILE"
+          $SCRIPTS_CONFIG --enable CONFIG_CRYPTO_USER_API_HASH
+          $SCRIPTS_CONFIG --enable CONFIG_CRYPTO_USER_API_SKCIPHER
           
-          echo "NetHunter configs added with MT76 dependencies."
+          echo "NetHunter config injection complete!"
+          NHEOF
+          chmod +x nethunter_inject.sh
 
-      - name: Fix Build Issues
+      - name: Patch Build Script for NetHunter
+        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
+        run: |
+          cd kernel_workspace
+          
+          # Find the build script
+          BUILD_SCRIPT="build/build.sh"
+          
+          if [ -f "$BUILD_SCRIPT" ]; then
+            echo "Patching build script..."
+            
+            # Add hook after defconfig generation
+            sed -i '/make.*defconfig/a \
+          # NetHunter config injection\
+          if [ -f "${KERNEL_DIR}/nethunter_inject.sh" ]; then\
+            echo "Running NetHunter config injection..."\
+            bash "${KERNEL_DIR}/nethunter_inject.sh" "${OUT_DIR}/.config"\
+            make -C ${KERNEL_DIR} O=${OUT_DIR} olddefconfig\
+          fi' "$BUILD_SCRIPT"
+            
+            echo "Build script patched!"
+          fi
+
+      - name: Fix show_pad Error
         run: |
           sed -i '/goto show_pad;/d' kernel_workspace/kernel-5.10/fs/proc/task_mmu.c
-
-      - name: Custom Build Time
-        if: ${{ github.event.inputs.BUILD_TIME != '' && github.event.inputs.BUILD_TIME != 'F' }}
-        run: |
-          DATESTR="${{ github.event.inputs.BUILD_TIME }}"
-          echo "KBUILD_BUILD_TIMESTAMP=${DATESTR}" >> "$GITHUB_ENV"
-          echo "KBUILD_BUILD_VERSION=1" >> "$GITHUB_ENV"
 
       - name: Build Kernel
         run: |
@@ -499,12 +459,11 @@ jobs:
             exit 1
           fi
           SIZE=$(stat -c%s "$IMAGE")
-          echo "Image.gz: $SIZE bytes ($(($SIZE / 1024 / 1024)) MB)"
+          echo "Image.gz size: $SIZE bytes"
           if [ "$SIZE" -lt 1000000 ]; then
             echo "ERROR: Image.gz too small!"
             exit 1
           fi
-          echo "Kernel built successfully!"
 
       - name: Create AnyKernel3 Package
         run: |
@@ -525,11 +484,8 @@ jobs:
           [ "${{ github.event.inputs.NETHUNTER }}" = "true" ] && SUFFIX="${SUFFIX}_NH"
           echo "value=${SUFFIX}" >> $GITHUB_OUTPUT
 
-      - name: Upload Kernel Artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: "Zabixii_Kernel${{ steps.suffix.outputs.value }}_by_Zabixii"
           path: ./Anykernel3_Zabixii/*
-
-      - name: Post-build Disk Check
-        run: df -h
