@@ -1,9 +1,10 @@
 # ============================================
 # Zabixii Kernel Build Workflow
-# Version: 1.7.0
+# Version: 1.9.0
 # - Magisk only
-# - NetHunter with WiFi drivers
-# - Compatible MT76 integration
+# - Uses EXISTING kernel drivers
+# - MT7612U, ATH9K, RT2800 support
+# - NO external cloning (no bootloop)
 # ============================================
 
 name: Build OnePlus Nord 3 AOSP - Zabixii (NetHunter)
@@ -53,7 +54,7 @@ jobs:
       - name: Show Build Configuration
         run: |
           echo "=============================================="
-          echo "  Zabixii Kernel Build v1.7.0"
+          echo "  Zabixii Kernel Build v1.9.0"
           echo "=============================================="
           echo "SUFFIX: ${{ github.event.inputs.SUFFIX }}"
           echo "NETHUNTER: ${{ github.event.inputs.NETHUNTER }}"
@@ -103,7 +104,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ runner.os }}-${{ github.event.inputs.FILE }}-v6
+          key: ccache-${{ runner.os }}-${{ github.event.inputs.FILE }}-v8
 
       - name: Initialize Ccache
         run: |
@@ -190,44 +191,37 @@ jobs:
           EOF
           sed -i 's/check_defconfig//' ./build.config.gki
 
-      - name: Check Existing Wireless Drivers
+      - name: Add NetHunter Configuration
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           echo "=============================================="
-          echo "  Checking Existing Wireless Drivers"
-          echo "=============================================="
-          cd kernel_workspace/kernel-5.10/drivers/net/wireless
-          echo "Available wireless drivers:"
-          ls -la
-          echo ""
-          echo "Checking for MediaTek..."
-          ls -la mediatek/ 2>/dev/null || echo "No mediatek directory"
-          echo ""
-          echo "Checking Kconfig for available drivers..."
-          grep -r "MT76\|ATH9K\|RT2800\|RTL8" Kconfig* 2>/dev/null | head -20 || echo "No matches in Kconfig"
-
-      - name: Add NetHunter Safe Configs
-        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
-        run: |
-          echo "=============================================="
-          echo "  Adding NetHunter Configs"
+          echo "  Adding NetHunter Configuration v1.9.0"
           echo "=============================================="
           cd kernel_workspace/kernel-5.10
+          CONFIG_FILE=./arch/arm64/configs/gki_defconfig
           
-          cat >> arch/arm64/configs/gki_defconfig << 'EOF'
-          # NetHunter Marker
+          cat >> "$CONFIG_FILE" << 'EOF'
+
+          # ============================================
+          # NETHUNTER CONFIGURATION v1.9.0
+          # ============================================
+
+          # Marker configs (verify kernel is patched)
           CONFIG_IKCONFIG=y
           CONFIG_IKCONFIG_PROC=y
           CONFIG_MAGIC_SYSRQ=y
-          # USB HID
+
+          # USB HID for BadUSB attacks
           CONFIG_USB_CONFIGFS_F_HID=y
           CONFIG_USB_F_HID=y
-          # USB Serial
+
+          # USB Serial adapters
           CONFIG_USB_SERIAL_CH341=y
           CONFIG_USB_SERIAL_CP210X=y
           CONFIG_USB_SERIAL_FTDI_SIO=y
           CONFIG_USB_SERIAL_PL2303=y
-          # Wireless Framework
+
+          # Wireless framework (required for all WiFi)
           CONFIG_WIRELESS=y
           CONFIG_WIRELESS_EXT=y
           CONFIG_WEXT_CORE=y
@@ -238,15 +232,56 @@ jobs:
           CONFIG_MAC80211=y
           CONFIG_MAC80211_MESH=y
           CONFIG_RFKILL=y
+
+          # MT76 driver for MT7612U (EXISTING in kernel)
+          CONFIG_MT76_CORE=y
+          CONFIG_MT76_USB=y
+          CONFIG_MT76x02_LIB=y
+          CONFIG_MT76x02_USB=y
+          CONFIG_MT76x2_COMMON=y
+          CONFIG_MT76x2U=y
+
+          # MT7601U driver (EXISTING in kernel)
+          CONFIG_MT7601U=y
+
+          # ATH9K driver for TL-WN822N v1-v3 (EXISTING in kernel)
+          CONFIG_ATH_COMMON=y
+          CONFIG_ATH9K=y
+          CONFIG_ATH9K_HW=y
+          CONFIG_ATH9K_COMMON=y
+          CONFIG_ATH9K_HTC=y
+          CONFIG_ATH9K_HTC_DEBUGFS=y
+
+          # RT2800 driver for Ralink adapters (EXISTING in kernel)
+          CONFIG_RT2X00=y
+          CONFIG_RT2800_LIB=y
+          CONFIG_RT2800_LIB_MMIO=y
+          CONFIG_RT2800USB=y
+          CONFIG_RT2800USB_RT53XX=y
+          CONFIG_RT2800USB_RT55XX=y
+
+          # Realtek basic drivers (EXISTING in kernel)
+          CONFIG_RTL8XXXU=y
+          CONFIG_RTL8187=y
+          CONFIG_RTL8192CU=y
+
           # Networking
           CONFIG_TUN=y
           CONFIG_VETH=y
           CONFIG_BRIDGE=y
           CONFIG_VLAN_8021Q=y
           CONFIG_MACVLAN=y
+
+          # Namespaces (NO USER_NS - causes bootloop)
+          CONFIG_NET_NS=y
+          CONFIG_PID_NS=y
+          CONFIG_IPC_NS=y
+          CONFIG_UTS_NS=y
+
           # Input
           CONFIG_INPUT_UINPUT=y
           CONFIG_UHID=y
+
           # Netfilter
           CONFIG_NETFILTER_XT_TARGET_TPROXY=y
           CONFIG_NETFILTER_XT_TARGET_TEE=y
@@ -258,130 +293,39 @@ jobs:
           CONFIG_NETFILTER_XT_MATCH_MAC=y
           CONFIG_NETFILTER_XT_MATCH_IPRANGE=y
           CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y
-          # Namespaces
-          CONFIG_NET_NS=y
-          CONFIG_PID_NS=y
-          CONFIG_IPC_NS=y
-          CONFIG_UTS_NS=y
+
           # Bluetooth
           CONFIG_BT_RFCOMM=y
           CONFIG_BT_RFCOMM_TTY=y
           CONFIG_BT_BNEP=y
           CONFIG_BT_HIDP=y
           CONFIG_BT_HCIBTUSB=y
-          # PPP
+
+          # PPP/VPN
           CONFIG_PPP=y
           CONFIG_PPP_DEFLATE=y
           CONFIG_PPP_MPPE=y
           CONFIG_PPTP=y
           CONFIG_PPPOE=y
+
           # Filesystems
           CONFIG_OVERLAY_FS=y
           CONFIG_SQUASHFS=y
           CONFIG_SQUASHFS_XZ=y
           CONFIG_SQUASHFS_LZO=y
+
           # Crypto
           CONFIG_CRYPTO_USER_API_HASH=y
           CONFIG_CRYPTO_USER_API_SKCIPHER=y
-          EOF
 
-      - name: Add NetHunter Kernel Configuration
-        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
-        run: |
-          cd kernel_workspace/kernel-5.10
-          CONFIG_FILE=./arch/arm64/configs/gki_defconfig
+          # END NETHUNTER CONFIGURATION
+          EOF
           
-          echo "Adding NetHunter kernel configs..."
-          
-          # Marker configs
-          echo "CONFIG_IKCONFIG=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IKCONFIG_PROC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MAGIC_SYSRQ=y" >> "$CONFIG_FILE"
-          
-          # USB HID for BadUSB
-          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_F_HID=y" >> "$CONFIG_FILE"
-          
-          # USB Serial adapters
-          echo "CONFIG_USB_SERIAL_CH341=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_SERIAL_CP210X=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_SERIAL_FTDI_SIO=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_SERIAL_PL2303=y" >> "$CONFIG_FILE"
-          
-          # Wireless framework (dependencies for Wi-Fi drivers)
-          echo "CONFIG_WIRELESS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_WIRELESS_EXT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_WEXT_CORE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_WEXT_PROC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_WEXT_PRIV=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CFG80211=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CFG80211_WEXT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MAC80211=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MAC80211_MESH=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RFKILL=y" >> "$CONFIG_FILE"
-          
-          # MT76 driver and dependencies for MT7612U
-          echo "CONFIG_MT76_CORE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MT76_USB=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MT76x02_LIB=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MT76x02_USB=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MT76x2_COMMON=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MT76x2U=y" >> "$CONFIG_FILE"
-          
-          # Networking
-          echo "CONFIG_TUN=y" >> "$CONFIG_FILE"
-          echo "CONFIG_VETH=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BRIDGE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_VLAN_8021Q=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MACVLAN=y" >> "$CONFIG_FILE"
-          
-          # Namespaces (NO USER_NS)
-          echo "CONFIG_NET_NS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PID_NS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"
-          
-          # Input
-          echo "CONFIG_INPUT_UINPUT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_UHID=y" >> "$CONFIG_FILE"
-          
-          # Netfilter
-          echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_TARGET_TEE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_TARGET_LOG=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_U32=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_STRING=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_MULTIPORT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_MARK=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_MAC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_IPRANGE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y" >> "$CONFIG_FILE"
-          
-          # Bluetooth
-          echo "CONFIG_BT_RFCOMM=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_RFCOMM_TTY=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_BNEP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_HIDP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_HCIBTUSB=y" >> "$CONFIG_FILE"
-          
-          # PPP/VPN
-          echo "CONFIG_PPP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPP_DEFLATE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPP_MPPE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPTP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_PPPOE=y" >> "$CONFIG_FILE"
-          
-          # Filesystems
-          echo "CONFIG_OVERLAY_FS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_SQUASHFS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_SQUASHFS_XZ=y" >> "$CONFIG_FILE"
-          echo "CONFIG_SQUASHFS_LZO=y" >> "$CONFIG_FILE"
-          
-          # Crypto
-          echo "CONFIG_CRYPTO_USER_API_HASH=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CRYPTO_USER_API_SKCIPHER=y" >> "$CONFIG_FILE"
-          
-          echo "NetHunter configs added with MT76 dependencies."
+          echo "NetHunter configs added!"
+          echo ""
+          echo "=== Verifying configs ==="
+          grep -c "CONFIG_" "$CONFIG_FILE"
+          echo "Total config lines in gki_defconfig"
 
       - name: Fix Build Issues
         run: |
