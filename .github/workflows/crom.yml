@@ -1,8 +1,9 @@
 # ============================================
 # Zabixii Kernel Build Workflow
-# Version: 2.1.0
-# - FIXED: All networking/BT as modules (=m)
-# - Preserves KMI/ABI compatibility
+# Version: 2.2.0
+# - REMOVED: Namespace configs (break KMI)
+# - FIXED: OverlayFS/SquashFS as modules
+# - All networking/BT/PPP as modules
 # ============================================
 
 name: Build OnePlus Nord 3 AOSP - Zabixii (NetHunter)
@@ -52,8 +53,8 @@ jobs:
       - name: Show Build Configuration
         run: |
           echo "=============================================="
-          echo "  Zabixii Kernel Build v2.1.0"
-          echo "  KMI/ABI Compatible NetHunter"
+          echo "  Zabixii Kernel Build v2.2.0"
+          echo "  KMI/ABI Safe - No Namespace Configs"
           echo "=============================================="
           echo "SUFFIX: ${{ github.event.inputs.SUFFIX }}"
           echo "NETHUNTER: ${{ github.event.inputs.NETHUNTER }}"
@@ -103,12 +104,13 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ runner.os }}-${{ github.event.inputs.FILE }}-v10
+          key: ccache-${{ runner.os }}-${{ github.event.inputs.FILE }}-v11-clean
 
       - name: Initialize Ccache
         run: |
           mkdir -p "${{ env.CCACHE_DIR }}"
           ccache -M ${{ env.CCACHE_MAXSIZE }}
+          ccache -C
 
       - name: Install Repo Tool
         run: |
@@ -190,12 +192,12 @@ jobs:
           EOF
           sed -i 's/check_defconfig//' ./build.config.gki
 
-      - name: Add NetHunter Configuration (KMI Safe)
+      - name: Add NetHunter Configuration (KMI Safe v2.2.0)
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           echo "=============================================="
-          echo "  NetHunter v2.1.0 - KMI/ABI Safe"
-          echo "  All networking/BT as MODULES (=m)"
+          echo "  NetHunter v2.2.0 - KMI/ABI SAFE"
+          echo "  NO Namespaces, All Modules"
           echo "=============================================="
           cd kernel_workspace/kernel-5.10
           CONFIG_FILE=./arch/arm64/configs/gki_defconfig
@@ -203,21 +205,23 @@ jobs:
           cat >> "$CONFIG_FILE" << 'EOF'
 
           # ============================================
-          # NETHUNTER v2.1.0 - KMI/ABI SAFE
-          # All networking configs as MODULES to
-          # preserve vendor module compatibility
+          # NETHUNTER v2.2.0 - KMI/ABI SAFE
+          # ============================================
+          # REMOVED: CONFIG_NET_NS, CONFIG_PID_NS, 
+          #          CONFIG_IPC_NS, CONFIG_UTS_NS
+          # (These break task_struct layout)
           # ============================================
 
-          # Marker configs (safe as built-in)
+          # Marker configs (safe)
           CONFIG_IKCONFIG=y
           CONFIG_IKCONFIG_PROC=y
           CONFIG_MAGIC_SYSRQ=y
 
-          # USB HID for BadUSB (safe as built-in)
+          # USB HID for BadUSB (safe)
           CONFIG_USB_CONFIGFS_F_HID=y
           CONFIG_USB_F_HID=y
 
-          # USB Serial adapters (safe as built-in)
+          # USB Serial adapters (safe)
           CONFIG_USB_SERIAL_CH341=y
           CONFIG_USB_SERIAL_CP210X=y
           CONFIG_USB_SERIAL_FTDI_SIO=y
@@ -262,28 +266,24 @@ jobs:
           CONFIG_RTL8XXXU=m
           CONFIG_RTL8187=m
 
-          # ============================================
-          # NETWORKING - ALL AS MODULES (KMI SAFE!)
-          # ============================================
+          # NETWORKING - ALL AS MODULES
           CONFIG_TUN=m
           CONFIG_VETH=m
           CONFIG_BRIDGE=m
           CONFIG_VLAN_8021Q=m
           CONFIG_MACVLAN=m
 
-          # ============================================
-          # NAMESPACES (safe as built-in, NO USER_NS)
-          # ============================================
-          CONFIG_NET_NS=y
-          CONFIG_PID_NS=y
-          CONFIG_IPC_NS=y
-          CONFIG_UTS_NS=y
+          # NO NAMESPACE CONFIGS - REMOVED!
+          # CONFIG_NET_NS - DO NOT ADD
+          # CONFIG_PID_NS - DO NOT ADD
+          # CONFIG_IPC_NS - DO NOT ADD
+          # CONFIG_UTS_NS - DO NOT ADD
 
-          # Input (safe as built-in)
+          # Input (safe)
           CONFIG_INPUT_UINPUT=y
           CONFIG_UHID=y
 
-          # Netfilter (safe as built-in)
+          # Netfilter (safe)
           CONFIG_NETFILTER_XT_TARGET_TPROXY=y
           CONFIG_NETFILTER_XT_TARGET_TEE=y
           CONFIG_NETFILTER_XT_TARGET_LOG=y
@@ -295,38 +295,37 @@ jobs:
           CONFIG_NETFILTER_XT_MATCH_IPRANGE=y
           CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y
 
-          # ============================================
-          # BLUETOOTH - ALL AS MODULES (KMI SAFE!)
-          # ============================================
+          # BLUETOOTH - ALL AS MODULES
           CONFIG_BT_RFCOMM=m
           CONFIG_BT_RFCOMM_TTY=y
           CONFIG_BT_BNEP=m
           CONFIG_BT_HIDP=m
           CONFIG_BT_HCIBTUSB=m
 
-          # ============================================
-          # PPP/VPN - ALL AS MODULES (KMI SAFE!)
-          # ============================================
+          # PPP/VPN - ALL AS MODULES
           CONFIG_PPP=m
           CONFIG_PPP_DEFLATE=m
           CONFIG_PPP_MPPE=m
           CONFIG_PPTP=m
           CONFIG_PPPOE=m
 
-          # Filesystems (safe as built-in)
-          CONFIG_OVERLAY_FS=y
-          CONFIG_SQUASHFS=y
+          # FILESYSTEMS - AS MODULES
+          CONFIG_OVERLAY_FS=m
+          CONFIG_SQUASHFS=m
           CONFIG_SQUASHFS_XZ=y
           CONFIG_SQUASHFS_LZO=y
 
-          # Crypto (safe as built-in)
+          # Crypto (safe)
           CONFIG_CRYPTO_USER_API_HASH=y
           CONFIG_CRYPTO_USER_API_SKCIPHER=y
 
-          # END NETHUNTER v2.1.0
+          # END NETHUNTER v2.2.0
           EOF
           
-          echo "NetHunter v2.1.0 configs added - ALL KMI SAFE!"
+          echo "NetHunter v2.2.0 configs added!"
+          echo "- NO namespace configs"
+          echo "- All networking/BT/PPP as modules"
+          echo "- Filesystems as modules"
 
       - name: Fix Build Issues
         run: |
