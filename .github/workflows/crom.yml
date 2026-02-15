@@ -1,9 +1,12 @@
 # ============================================
 # Zabixii Kernel Build Workflow
-# Version: 2.2.0
-# - REMOVED: Namespace configs (break KMI)
-# - FIXED: OverlayFS/SquashFS as modules
-# - All networking/BT/PPP as modules
+# Version: 2.3.1
+# - FIXED: WEXT/WIRELESS_EXT removed (broke net_device KMI)
+# - FIXED: RFKILL left to base config (override broke WiFi/BT)
+# - FIXED: ccache -C vs -z tied to FAST_BUILD input
+# - KEPT: OverlayFS/SquashFS as modules
+# - KEPT: No namespace configs
+# - All networking/BT/PPP/USB/WiFi drivers as modules
 # ============================================
 
 name: Build OnePlus Nord 3 AOSP - Zabixii (NetHunter)
@@ -28,7 +31,7 @@ on:
         default: "Zabixii"
       FAST_BUILD:
         type: boolean
-        description: "Enable fast build?"
+        description: "Enable fast build (use ccache)?"
         required: true
         default: true
       NETHUNTER:
@@ -53,11 +56,12 @@ jobs:
       - name: Show Build Configuration
         run: |
           echo "=============================================="
-          echo "  Zabixii Kernel Build v2.2.0"
-          echo "  KMI/ABI Safe - No Namespace Configs"
+          echo "  Zabixii Kernel Build v2.3.1"
+          echo "  KMI/ABI Safe - Maximum Module Safety"
           echo "=============================================="
           echo "SUFFIX: ${{ github.event.inputs.SUFFIX }}"
           echo "NETHUNTER: ${{ github.event.inputs.NETHUNTER }}"
+          echo "FAST_BUILD: ${{ github.event.inputs.FAST_BUILD }}"
           echo "=============================================="
 
       - name: Set Environment Variables
@@ -104,13 +108,19 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ runner.os }}-${{ github.event.inputs.FILE }}-v11-clean
+          key: ccache-${{ runner.os }}-${{ github.event.inputs.FILE }}-v13
 
       - name: Initialize Ccache
         run: |
           mkdir -p "${{ env.CCACHE_DIR }}"
           ccache -M ${{ env.CCACHE_MAXSIZE }}
-          ccache -C
+          if [ "${{ github.event.inputs.FAST_BUILD }}" = "true" ]; then
+            echo "FAST_BUILD: keeping ccache, zeroing stats"
+            ccache -z
+          else
+            echo "CLEAN BUILD: clearing entire ccache"
+            ccache -C
+          fi
 
       - name: Install Repo Tool
         run: |
@@ -188,16 +198,17 @@ jobs:
           CONFIG_TMPFS_POSIX_ACL=y
           CONFIG_TCP_CONG_ADVANCED=y
           CONFIG_TCP_CONG_BBR=y
-          CONFIG_NET_SCH_FQ=y
+          CONFIG_NET_SCH_FQ=m
           EOF
           sed -i 's/check_defconfig//' ./build.config.gki
 
-      - name: Add NetHunter Configuration (KMI Safe v2.2.0)
+      - name: Add NetHunter Configuration (KMI Safe v2.3.1)
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           echo "=============================================="
-          echo "  NetHunter v2.2.0 - KMI/ABI SAFE"
-          echo "  NO Namespaces, All Modules"
+          echo "  NetHunter v2.3.1 - MAXIMUM KMI SAFETY"
+          echo "  NO Namespaces, NO WEXT, NO base overrides"
+          echo "  Everything possible as =m"
           echo "=============================================="
           cd kernel_workspace/kernel-5.10
           CONFIG_FILE=./arch/arm64/configs/gki_defconfig
@@ -205,39 +216,51 @@ jobs:
           cat >> "$CONFIG_FILE" << 'EOF'
 
           # ============================================
-          # NETHUNTER v2.2.0 - KMI/ABI SAFE
+          # NETHUNTER v2.3.1 - MAXIMUM KMI SAFETY
           # ============================================
-          # REMOVED: CONFIG_NET_NS, CONFIG_PID_NS, 
-          #          CONFIG_IPC_NS, CONFIG_UTS_NS
-          # (These break task_struct layout)
+          # RULE 1: If it CAN be =m, it MUST be =m
+          # RULE 2: Never override base defconfig =y with =m
+          #         (just don't include it, let base win)
+          # RULE 3: No configs that modify core structs
+          # ============================================
+          # BANNED (break task_struct):
+          #   CONFIG_NET_NS, CONFIG_PID_NS,
+          #   CONFIG_IPC_NS, CONFIG_UTS_NS
+          # BANNED (break net_device via select):
+          #   CONFIG_CFG80211_WEXT
+          #   (selects WIRELESS_EXT, WEXT_CORE, WEXT_PROC,
+          #    WEXT_SPY, WEXT_PRIV - all modify net_device)
+          # BANNED (break net_device directly):
+          #   CONFIG_WIRELESS_EXT, CONFIG_WEXT_CORE,
+          #   CONFIG_WEXT_PROC, CONFIG_WEXT_PRIV
+          # NOT INCLUDED (let base decide, override dangerous):
+          #   CONFIG_RFKILL (base has =y, override to =m
+          #   breaks vendor WiFi/BT rfkill_alloc at boot)
           # ============================================
 
-          # Marker configs (safe)
+          # Marker configs (no struct changes)
           CONFIG_IKCONFIG=y
           CONFIG_IKCONFIG_PROC=y
           CONFIG_MAGIC_SYSRQ=y
 
-          # USB HID for BadUSB (safe)
-          CONFIG_USB_CONFIGFS_F_HID=y
-          CONFIG_USB_F_HID=y
+          # USB HID for BadUSB - AS MODULES
+          CONFIG_USB_CONFIGFS_F_HID=m
+          CONFIG_USB_F_HID=m
 
-          # USB Serial adapters (safe)
-          CONFIG_USB_SERIAL_CH341=y
-          CONFIG_USB_SERIAL_CP210X=y
-          CONFIG_USB_SERIAL_FTDI_SIO=y
-          CONFIG_USB_SERIAL_PL2303=y
+          # USB Serial adapters - AS MODULES
+          CONFIG_USB_SERIAL_CH341=m
+          CONFIG_USB_SERIAL_CP210X=m
+          CONFIG_USB_SERIAL_FTDI_SIO=m
+          CONFIG_USB_SERIAL_PL2303=m
 
-          # Wireless framework as MODULES
-          CONFIG_WIRELESS=y
-          CONFIG_WIRELESS_EXT=y
-          CONFIG_WEXT_CORE=y
-          CONFIG_WEXT_PROC=y
-          CONFIG_WEXT_PRIV=y
+          # Wireless framework - MODULES ONLY
+          # CFG80211/MAC80211 depend on CONFIG_WIRELESS=y
+          # which is already =y in base (phone has WiFi).
+          # DO NOT add CFG80211_WEXT - it selects WIRELESS_EXT
+          # which modifies struct net_device and breaks KMI.
           CONFIG_CFG80211=m
-          CONFIG_CFG80211_WEXT=y
           CONFIG_MAC80211=m
           CONFIG_MAC80211_MESH=y
-          CONFIG_RFKILL=y
 
           # MT76 driver as MODULE for MT7612U
           CONFIG_MT76_CORE=m
@@ -273,17 +296,11 @@ jobs:
           CONFIG_VLAN_8021Q=m
           CONFIG_MACVLAN=m
 
-          # NO NAMESPACE CONFIGS - REMOVED!
-          # CONFIG_NET_NS - DO NOT ADD
-          # CONFIG_PID_NS - DO NOT ADD
-          # CONFIG_IPC_NS - DO NOT ADD
-          # CONFIG_UTS_NS - DO NOT ADD
-
-          # Input (safe)
+          # Input (no core struct changes)
           CONFIG_INPUT_UINPUT=y
           CONFIG_UHID=y
 
-          # Netfilter (safe)
+          # Netfilter (match/target registration API only, no struct changes)
           CONFIG_NETFILTER_XT_TARGET_TPROXY=y
           CONFIG_NETFILTER_XT_TARGET_TEE=y
           CONFIG_NETFILTER_XT_TARGET_LOG=y
@@ -296,6 +313,7 @@ jobs:
           CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y
 
           # BLUETOOTH - ALL AS MODULES
+          # CONFIG_BT is already in base, do not override
           CONFIG_BT_RFCOMM=m
           CONFIG_BT_RFCOMM_TTY=y
           CONFIG_BT_BNEP=m
@@ -309,27 +327,36 @@ jobs:
           CONFIG_PPTP=m
           CONFIG_PPPOE=m
 
-          # FILESYSTEMS - AS MODULES
+          # FILESYSTEMS - AS MODULES (CRITICAL FOR KMI)
+          # OVERLAY_FS=y modifies struct inode -> instant bootloop
           CONFIG_OVERLAY_FS=m
           CONFIG_SQUASHFS=m
           CONFIG_SQUASHFS_XZ=y
           CONFIG_SQUASHFS_LZO=y
 
-          # Crypto (safe)
+          # Crypto (safe, userspace API only)
           CONFIG_CRYPTO_USER_API_HASH=y
           CONFIG_CRYPTO_USER_API_SKCIPHER=y
 
-          # END NETHUNTER v2.2.0
+          # END NETHUNTER v2.3.1
           EOF
           
-          echo "NetHunter v2.2.0 configs added!"
-          echo "- NO namespace configs"
-          echo "- All networking/BT/PPP as modules"
-          echo "- Filesystems as modules"
+          echo "NetHunter v2.3.1 configs added!"
+          echo "- NO namespace configs (task_struct KMI)"
+          echo "- NO WEXT/CFG80211_WEXT (net_device KMI)"
+          echo "- NO RFKILL override (base has =y)"
+          echo "- All drivers as modules"
 
       - name: Fix Build Issues
         run: |
           sed -i '/goto show_pad;/d' kernel_workspace/kernel-5.10/fs/proc/task_mmu.c
+
+      - name: Clean Build Environment
+        if: ${{ github.event.inputs.FAST_BUILD != 'true' }}
+        run: |
+          cd kernel_workspace
+          rm -rf out/
+          echo "CLEAN BUILD - removed all cached objects"
 
       - name: Build Kernel
         run: |
