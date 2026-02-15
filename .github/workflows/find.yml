@@ -1,0 +1,31 @@
+name: Find Config File
+
+on:
+  workflow_dispatch:
+
+jobs:
+  find:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Search
+        run: |
+          echo "=== Branch ==="
+          git branch -v
+          echo ""
+          echo "=== Repo root ==="
+          ls -la
+          echo ""
+          echo "=== All files ==="
+          find . -maxdepth 2 -type f -name "*.txt"
+          echo ""
+          echo "=== All files in root ==="
+          find . -maxdepth 1 -type f
+          echo ""
+          echo "=== Looking for config ==="
+          find . -name "config*" -type f
+          echo ""
+          echo "=== GITHUB_WORKSPACE ==="
+          ls -la $GITHUB_WORKSPACE/
