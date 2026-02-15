@@ -1,34 +1,19 @@
 # ============================================
 # Zabixii Kernel DIAGNOSTIC Workflow
-# Version: DIAG-1.0
+# Version: DIAG-2.0
 # ============================================
-# PURPOSE: Find the EXACT cause of bootloop
-# by building progressively from zero changes.
+# CONFIRMED:
+#   Level 1: ✅ BOOTS
+#   Level 2: ✅ BOOTS
+#   Level 3: ❌ BOOTLOOP (NetHunter =m configs)
 #
-# DIAGNOSTIC LEVELS:
-#   0 = Absolute stock. Zero patches. Zero config
-#       changes. If this bootloops, the problem is
-#       the kernel source, build.config, toolchain,
-#       or AnyKernel3 — NOT your modifications.
-#   1 = Stock + vendor fixes only (thermal/fingerprint
-#       Makefiles, audio codec, task_mmu fix).
-#       If 0 boots but 1 bootloops, a patch is wrong.
-#   2 = Level 1 + suffix + check_defconfig disable.
-#       If 1 boots but 2 bootloops, setlocalversion
-#       or check_defconfig removal breaks something.
-#   3 = Level 2 + NetHunter =m modules.
-#       If 2 boots but 3 bootloops, a specific =m
-#       config has a hidden 'select' forcing a =y
-#       struct change.
-#
-# ARTIFACTS UPLOADED:
-#   - final .config (shows EXACTLY what was compiled)
-#   - build log (shows exact toolchain used)
-#   - Image.gz (the kernel)
-#   - defconfig diff (your changes vs stock)
+# This workflow splits Level 3 into 6 sub-groups
+# to find the EXACT config(s) causing bootloop.
+# Run 3A first. If it boots, run 3B, etc.
+# When one bootloops, that group is the culprit.
 # ============================================
 
-name: DIAGNOSTIC - Zabixii Kernel
+name: DIAGNOSTIC - NetHunter Bisect
 
 on:
   workflow_dispatch:
@@ -40,23 +25,25 @@ on:
         default: manifest_aosp
       DIAG_LEVEL:
         type: choice
-        description: "Diagnostic level (start at 0, work up)"
+        description: "Which group to test?"
         required: true
-        default: "0"
+        default: "3A"
         options:
-          - "0"
-          - "1"
-          - "2"
-          - "3"
+          - "3A"
+          - "3B"
+          - "3C"
+          - "3D"
+          - "3E"
+          - "3F"
       SUFFIX:
         type: string
-        description: "Custom kernel suffix (level 2+ only)"
+        description: "Custom kernel suffix"
         required: false
         default: "Zabixii"
 
 jobs:
   diagnose:
-    name: "DIAG Level ${{ github.event.inputs.DIAG_LEVEL }}"
+    name: "DIAG ${{ github.event.inputs.DIAG_LEVEL }}"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -65,20 +52,17 @@ jobs:
       - name: Show Diagnostic Plan
         run: |
           echo "=============================================="
-          echo "  DIAGNOSTIC BUILD - Level ${{ github.event.inputs.DIAG_LEVEL }}"
+          echo "  NETHUNTER BISECT - Group ${{ github.event.inputs.DIAG_LEVEL }}"
           echo "=============================================="
           echo ""
-          echo "Level 0: STOCK kernel, zero changes"
-          echo "Level 1: + vendor fixes (Makefiles, audio, task_mmu)"
-          echo "Level 2: + suffix, check_defconfig disable"
-          echo "Level 3: + NetHunter =m modules"
+          echo "3A: WiFi (CFG80211, MAC80211, MT76, ATH9K, RT2800, RTL)"
+          echo "3B: USB (HID, Serial adapters)"
+          echo "3C: Networking (TUN, VETH, BRIDGE, VLAN, MACVLAN)"
+          echo "3D: Bluetooth (RFCOMM, BNEP, HIDP, HCIBTUSB)"
+          echo "3E: PPP/VPN (PPP, DEFLATE, MPPE, PPTP, PPPOE)"
+          echo "3F: Filesystems (OVERLAY_FS, SQUASHFS)"
           echo ""
-          echo ">>> BUILDING LEVEL ${{ github.event.inputs.DIAG_LEVEL }} <<<"
-          echo ""
-          if [ "${{ github.event.inputs.DIAG_LEVEL }}" = "0" ]; then
-            echo "If this bootloops, your kernel source/build.config/AnyKernel3"
-            echo "is fundamentally broken. None of your patches matter."
-          fi
+          echo ">>> TESTING GROUP ${{ github.event.inputs.DIAG_LEVEL }} <<<"
           echo "=============================================="
 
       - name: Set Environment Variables
@@ -128,60 +112,12 @@ jobs:
           repo init -u https://github.com/hemasai1109/Custom_kernel_OnePlus_Nord3.git -m ${{ github.event.inputs.FILE }}.xml --depth=1
           repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle --force-sync
 
-      # ============================================
-      # DIAGNOSTIC: Log EVERYTHING about the toolchain
-      # ============================================
-      - name: "[DIAG] Inspect Toolchain"
-        run: |
-          cd kernel_workspace
-          echo "=============================================="
-          echo "  TOOLCHAIN INSPECTION"
-          echo "=============================================="
-          echo ""
-          echo "=== System clang ==="
-          which clang 2>/dev/null && clang --version 2>/dev/null || echo "No system clang"
-          echo ""
-          echo "=== Prebuilt clang search ==="
-          find . -name "clang" -path "*/bin/clang" -type f 2>/dev/null | while read f; do
-            echo "FOUND: $f"
-            $f --version 2>/dev/null | head -2
-            echo ""
-          done
-          echo ""
-          echo "=== Prebuilt GCC search ==="
-          find . -name "aarch64-linux-gnu-gcc" -o -name "aarch64-linux-android*-gcc" 2>/dev/null | head -5
-          echo ""
-          echo "=== build.config.gki contents ==="
-          cat kernel-5.10/build.config.gki 2>/dev/null || echo "Not found"
-          echo ""
-          echo "=== All build.config* files ==="
-          find . -name "build.config*" -not -path "./.repo/*" 2>/dev/null
-          echo ""
-          echo "=== CLANG references in build configs ==="
-          grep -rn "CLANG\|CC=\|HOSTCC\|CROSS_COMPILE\|LLVM" --include="build.config*" . 2>/dev/null | grep -v ".repo/"
-          echo "=============================================="
-
       - name: Copy Build Configuration
         run: |
           git clone https://github.com/hemasai1109/Custom_kernel_OnePlus_Nord3.git kernel_workflow
           cp kernel_workflow/build.config.oplus6983-d kernel_workspace/kernel-5.10/
           cd kernel_workspace/kernel-5.10
           mv build.config.oplus6983-d build.config.oplus6983
-
-      # ============================================
-      # DIAGNOSTIC: Log the build config we just copied
-      # ============================================
-      - name: "[DIAG] Inspect build.config.oplus6983"
-        run: |
-          echo "=============================================="
-          echo "  build.config.oplus6983 CONTENTS"
-          echo "=============================================="
-          cat kernel_workspace/kernel-5.10/build.config.oplus6983
-          echo ""
-          echo "=============================================="
-          echo "  LOOKING FOR: DEFCONFIG, POST_DEFCONFIG_CMDS,"
-          echo "  CLANG_PREBUILT_BIN, CC, MAKE_GOALS"
-          echo "=============================================="
 
       - name: Set Build Config Path
         run: echo "BUILD_CONFIG=kernel-5.10/build.config.oplus6983" >> $GITHUB_ENV
@@ -192,29 +128,20 @@ jobs:
           mv kernel_module/vendor .
           rm -rf kernel_module
 
-      # ============================================
-      # DIAGNOSTIC: Save stock gki_defconfig BEFORE any changes
-      # ============================================
       - name: "[DIAG] Save stock defconfig"
         run: |
           cp kernel_workspace/kernel-5.10/arch/arm64/configs/gki_defconfig /tmp/gki_defconfig.stock
-          echo "Stock gki_defconfig saved ($(wc -l < /tmp/gki_defconfig.stock) lines)"
 
       # ============================================
-      # LEVEL 1+: Vendor fixes
+      # LEVEL 1: Vendor fixes (confirmed safe)
       # ============================================
-      - name: Create Thermal Makefile
-        if: ${{ github.event.inputs.DIAG_LEVEL >= '1' }}
+      - name: Vendor Fixes
         run: |
           cd kernel_workspace/vendor/oplus/kernel/cpu/thermal
           echo "obj-y += horae_shell_temp" > Makefile
           echo "obj-y += oplus_ipa_thermal" >> Makefile
-          echo "[LEVEL 1] Thermal Makefile created"
 
-      - name: Create Fingerprint Makefile
-        if: ${{ github.event.inputs.DIAG_LEVEL >= '1' }}
-        run: |
-          cd kernel_workspace/vendor/oplus/secure/biometrics/fingerprints/bsp/drivers_kernel/component3.0/mtk
+          cd $GITHUB_WORKSPACE/kernel_workspace/vendor/oplus/secure/biometrics/fingerprints/bsp/drivers_kernel/component3.0/mtk
           cat > Makefile << 'EOF'
           obj-$(CONFIG_OPLUS_FINGERPRINT_COMMON) += oplus_fp_common/
           ifneq ($(CONFIG_OPLUS_FINGERPRINT_GOODIX)_$(CONFIG_OPLUS_FINGERPRINT_GOODIX_OPTICAL), _)
@@ -224,59 +151,42 @@ jobs:
           obj-$(CONFIG_OPLUS_FINGERPRINT_SILEAD_CAP) += silead/
           ccflags-$(CONFIG_OPLUS_FINGERPRINT_NAVIGATION_ENABLE) += -DFP_NAVIGATION_ENABLE
           EOF
-          echo "[LEVEL 1] Fingerprint Makefile created"
 
-      - name: Fix Audio Codec
-        if: ${{ github.event.inputs.DIAG_LEVEL >= '1' }}
-        run: |
-          cd kernel_workspace/kernel-5.10/sound/soc/codecs/
+          cd $GITHUB_WORKSPACE/kernel_workspace/kernel-5.10/sound/soc/codecs/
           sed -i 's/^int accdet_read_audio_res(unsigned int res_value)/int mt6357_accdet_read_audio_res(unsigned int res_value)/' mt6357-accdet.c
           sed -i 's/^EXPORT_SYMBOL(accdet_read_audio_res);/EXPORT_SYMBOL(mt6357_accdet_read_audio_res);/' mt6357-accdet.c
-          echo "[LEVEL 1] Audio codec fixed"
 
-      - name: Fix task_mmu
-        if: ${{ github.event.inputs.DIAG_LEVEL >= '1' }}
-        run: |
-          sed -i '/goto show_pad;/d' kernel_workspace/kernel-5.10/fs/proc/task_mmu.c
-          echo "[LEVEL 1] task_mmu.c fixed"
+          sed -i '/goto show_pad;/d' $GITHUB_WORKSPACE/kernel_workspace/kernel-5.10/fs/proc/task_mmu.c
 
       # ============================================
-      # LEVEL 2+: Suffix and check_defconfig
+      # LEVEL 2: Suffix + check_defconfig (confirmed safe)
       # ============================================
-      - name: Apply Custom Suffix
-        if: ${{ github.event.inputs.DIAG_LEVEL >= '2' }}
+      - name: Apply Suffix and Disable check_defconfig
         run: |
           cd kernel_workspace
           SUFFIX="${{ github.event.inputs.SUFFIX }}"
           ANDROID_VERSION="${{ env.ANDROID_VERSION }}"
-          for path in kernel-${{ env.KERNEL_VERSION }}/scripts/setlocalversion; do
-            [ -f "$path" ] || continue
-            sed -i 's/ -dirty//g' "$path"
-            sed -i "s/^res=.*/res=\"-${ANDROID_VERSION}-${SUFFIX}\"/" "$path"
-            chmod +x "$path"
-          done
+          SCRIPT="kernel-${{ env.KERNEL_VERSION }}/scripts/setlocalversion"
+          sed -i 's/ -dirty//g' "$SCRIPT"
+          echo "" >> "$SCRIPT"
+          echo "echo \"-${ANDROID_VERSION}-${SUFFIX}\"" >> "$SCRIPT"
+          echo "exit 0" >> "$SCRIPT"
+          chmod +x "$SCRIPT"
           cd kernel-${{ env.KERNEL_VERSION }}
           git add -A
           git commit -m "Custom suffix: $SUFFIX" || true
-          echo "[LEVEL 2] Suffix applied: $SUFFIX"
-
-      - name: Disable check_defconfig
-        if: ${{ github.event.inputs.DIAG_LEVEL >= '2' }}
-        run: |
-          cd kernel_workspace/kernel-5.10
           sed -i 's/check_defconfig//' ./build.config.gki
-          echo "[LEVEL 2] check_defconfig disabled"
 
       # ============================================
-      # LEVEL 3: NetHunter =m modules
+      # LEVEL 3 GROUPS: One at a time
       # ============================================
-      - name: Add NetHunter Modules
-        if: ${{ github.event.inputs.DIAG_LEVEL >= '3' }}
+      - name: "Add Group 3A - WiFi"
+        if: ${{ github.event.inputs.DIAG_LEVEL == '3A' }}
         run: |
           cd kernel_workspace/kernel-5.10
           cat >> arch/arm64/configs/gki_defconfig << 'EOF'
 
-          # NETHUNTER DIAG - modules only
+          # GROUP 3A: WiFi
           CONFIG_CFG80211=m
           CONFIG_MAC80211=m
           CONFIG_MAC80211_MESH=y
@@ -297,146 +207,140 @@ jobs:
           CONFIG_RT2800USB=m
           CONFIG_RTL8XXXU=m
           CONFIG_RTL8187=m
+          EOF
+          echo "Group 3A added"
+
+      - name: "Add Group 3B - USB"
+        if: ${{ github.event.inputs.DIAG_LEVEL == '3B' }}
+        run: |
+          cd kernel_workspace/kernel-5.10
+          cat >> arch/arm64/configs/gki_defconfig << 'EOF'
+
+          # GROUP 3B: USB
           CONFIG_USB_CONFIGFS_F_HID=m
           CONFIG_USB_F_HID=m
           CONFIG_USB_SERIAL_CH341=m
           CONFIG_USB_SERIAL_CP210X=m
           CONFIG_USB_SERIAL_FTDI_SIO=m
           CONFIG_USB_SERIAL_PL2303=m
+          EOF
+          echo "Group 3B added"
+
+      - name: "Add Group 3C - Networking"
+        if: ${{ github.event.inputs.DIAG_LEVEL == '3C' }}
+        run: |
+          cd kernel_workspace/kernel-5.10
+          cat >> arch/arm64/configs/gki_defconfig << 'EOF'
+
+          # GROUP 3C: Networking
           CONFIG_TUN=m
           CONFIG_VETH=m
           CONFIG_BRIDGE=m
           CONFIG_VLAN_8021Q=m
           CONFIG_MACVLAN=m
+          EOF
+          echo "Group 3C added"
+
+      - name: "Add Group 3D - Bluetooth"
+        if: ${{ github.event.inputs.DIAG_LEVEL == '3D' }}
+        run: |
+          cd kernel_workspace/kernel-5.10
+          cat >> arch/arm64/configs/gki_defconfig << 'EOF'
+
+          # GROUP 3D: Bluetooth
           CONFIG_BT_RFCOMM=m
           CONFIG_BT_BNEP=m
           CONFIG_BT_HIDP=m
           CONFIG_BT_HCIBTUSB=m
+          EOF
+          echo "Group 3D added"
+
+      - name: "Add Group 3E - PPP/VPN"
+        if: ${{ github.event.inputs.DIAG_LEVEL == '3E' }}
+        run: |
+          cd kernel_workspace/kernel-5.10
+          cat >> arch/arm64/configs/gki_defconfig << 'EOF'
+
+          # GROUP 3E: PPP/VPN
           CONFIG_PPP=m
           CONFIG_PPP_DEFLATE=m
           CONFIG_PPP_MPPE=m
           CONFIG_PPTP=m
           CONFIG_PPPOE=m
+          EOF
+          echo "Group 3E added"
+
+      - name: "Add Group 3F - Filesystems"
+        if: ${{ github.event.inputs.DIAG_LEVEL == '3F' }}
+        run: |
+          cd kernel_workspace/kernel-5.10
+          cat >> arch/arm64/configs/gki_defconfig << 'EOF'
+
+          # GROUP 3F: Filesystems
           CONFIG_OVERLAY_FS=m
           CONFIG_SQUASHFS=m
           CONFIG_SQUASHFS_XZ=y
           CONFIG_SQUASHFS_LZO=y
           EOF
-          echo "[LEVEL 3] NetHunter =m modules added"
+          echo "Group 3F added"
 
       # ============================================
-      # DIAGNOSTIC: Generate defconfig diff
+      # DIAGNOSTIC: Find hidden =y selects
       # ============================================
-      - name: "[DIAG] Generate defconfig diff"
+      - name: "[DIAG] Defconfig diff"
         run: |
-          echo "=============================================="
-          echo "  DEFCONFIG DIFF (stock vs current)"
-          echo "=============================================="
           diff /tmp/gki_defconfig.stock kernel_workspace/kernel-5.10/arch/arm64/configs/gki_defconfig > /tmp/defconfig.diff || true
-          cat /tmp/defconfig.diff
-          echo ""
-          echo "Lines added: $(grep -c '^>' /tmp/defconfig.diff 2>/dev/null || echo 0)"
-          echo "Lines removed: $(grep -c '^<' /tmp/defconfig.diff 2>/dev/null || echo 0)"
-          echo "=============================================="
+          echo "=== What we added ==="
+          grep '^>' /tmp/defconfig.diff
 
-      # ============================================
-      # BUILD
-      # ============================================
-      - name: Clean Build
-        run: |
-          cd kernel_workspace
-          rm -rf out/
-
-      - name: Build Kernel
+      - name: Clean and Build
         run: |
           cd kernel_workspace/
-          # Log the EXACT build command and environment
-          echo "=============================================="
-          echo "  BUILD START"
-          echo "  PATH: $PATH"
-          echo "  CC: ${CC:-not set}"
-          echo "  HOSTCC: ${HOSTCC:-not set}"
-          echo "=============================================="
+          rm -rf out/
           ./build/build.sh 2>&1 | tee /tmp/build.log
-          echo ""
-          echo "=============================================="
-          echo "  BUILD COMPLETE"
-          echo "=============================================="
 
-      # ============================================
-      # DIAGNOSTIC: Extract critical info from build log
-      # ============================================
-      - name: "[DIAG] Analyze build log"
+      - name: "[DIAG] Find hidden =y selects (THE SMOKING GUN)"
         if: always()
         run: |
-          echo "=============================================="
-          echo "  BUILD LOG ANALYSIS"
-          echo "=============================================="
-          echo ""
-          echo "=== Compiler actually used ==="
-          grep -i "clang version\|gcc version" /tmp/build.log | head -5 || echo "Not found in log"
-          echo ""
-          echo "=== CC variable in build ==="
-          grep "^CC\|CC=" /tmp/build.log | head -5 || echo "Not found"
-          echo ""
-          echo "=== CROSS_COMPILE ==="
-          grep "CROSS_COMPILE" /tmp/build.log | head -5 || echo "Not found"
-          echo ""
-          echo "=== Defconfig used ==="
-          grep -i "defconfig" /tmp/build.log | head -10 || echo "Not found"
-          echo ""
-          echo "=== ABI/KMI warnings ==="
-          grep -i "abi\|kmi\|symbol" /tmp/build.log | head -20 || echo "None found"
-          echo ""
-          echo "=== Errors/Warnings ==="
-          grep -i "error:\|warning:" /tmp/build.log | tail -20 || echo "None found"
-          echo "=============================================="
-
-      # ============================================
-      # DIAGNOSTIC: Save final .config
-      # ============================================
-      - name: "[DIAG] Capture final .config"
-        if: always()
-        run: |
-          echo "=============================================="
-          echo "  FINAL .config SEARCH"
-          echo "=============================================="
           FINAL_CONFIG=$(find kernel_workspace/out/ -name ".config" -type f 2>/dev/null | head -1)
           if [ -n "$FINAL_CONFIG" ]; then
-            echo "FOUND: $FINAL_CONFIG"
             cp "$FINAL_CONFIG" /tmp/final_config.txt
-            echo ""
-            echo "=== Struct-modifying configs in final build ==="
-            echo "These are the configs that ACTUALLY got compiled in,"
-            echo "regardless of what we put in gki_defconfig:"
-            echo ""
-            echo "--- Namespaces (modify task_struct) ---"
-            grep -E "CONFIG_(NET_NS|PID_NS|IPC_NS|UTS_NS|USER_NS)=" /tmp/final_config.txt || echo "  None found"
-            echo ""
-            echo "--- WEXT (modify net_device) ---"
-            grep -E "CONFIG_(WIRELESS_EXT|WEXT_CORE|WEXT_PROC|WEXT_PRIV|WEXT_SPY|CFG80211_WEXT)=" /tmp/final_config.txt || echo "  None found"
-            echo ""
-            echo "--- Filesystem struct changes ---"
-            grep -E "CONFIG_(OVERLAY_FS|SQUASHFS)=" /tmp/final_config.txt || echo "  None found"
-            echo ""
-            echo "--- TCP struct changes ---"
-            grep -E "CONFIG_(TCP_CONG_BBR|TCP_CONG_ADVANCED)=" /tmp/final_config.txt || echo "  None found"
-            echo ""
-            echo "--- VFS struct changes ---"
-            grep -E "CONFIG_(TMPFS_POSIX_ACL|TMPFS_XATTR)=" /tmp/final_config.txt || echo "  None found"
-            echo ""
-            echo "--- All =y configs NOT in stock (the danger zone) ---"
+
+            echo "=============================================="
+            echo "  NEW =y CONFIGS vs STOCK"
+            echo "  (configs forced to built-in by Kconfig select)"
+            echo "=============================================="
             comm -13 <(grep "=y" /tmp/gki_defconfig.stock | sort) <(grep "=y" /tmp/final_config.txt | sort) > /tmp/new_builtins.txt
-            echo "NEW BUILT-IN CONFIGS ($(wc -l < /tmp/new_builtins.txt) total):"
+            echo ""
+            echo "COUNT: $(wc -l < /tmp/new_builtins.txt)"
+            echo ""
             cat /tmp/new_builtins.txt
             echo ""
-            echo "^^^ IF ANY OF THESE TOUCH CORE STRUCTS, THAT'S YOUR BOOTLOOP ^^^"
+            echo "=============================================="
+            echo "^^^ THESE are the configs that Group ${{ github.event.inputs.DIAG_LEVEL }}"
+            echo "    silently forced to =y via Kconfig 'select'."
+            echo "    If ANY modify core structs, that's the bootloop."
+            echo "=============================================="
+            echo ""
+            
+            echo "=== Checking specific dangerous configs ==="
+            echo "--- Namespaces (task_struct) ---"
+            grep -E "CONFIG_(NET_NS|PID_NS|IPC_NS|UTS_NS|USER_NS)=y" /tmp/final_config.txt && echo "!!! FOUND - BOOTLOOP CAUSE !!!" || echo "  Clean"
+            echo "--- WEXT (net_device) ---"
+            grep -E "CONFIG_(WIRELESS_EXT|WEXT_CORE|WEXT_PROC|WEXT_PRIV|WEXT_SPY|CFG80211_WEXT)=y" /tmp/final_config.txt && echo "!!! FOUND - BOOTLOOP CAUSE !!!" || echo "  Clean"
+            echo "--- Overlay (struct inode) ---"
+            grep "CONFIG_OVERLAY_FS=y" /tmp/final_config.txt && echo "!!! FOUND - BOOTLOOP CAUSE !!!" || echo "  Clean"
+            echo "--- TCP (tcp_sock) ---"
+            grep "CONFIG_TCP_CONG_BBR=y" /tmp/final_config.txt && echo "!!! FOUND - BOOTLOOP CAUSE !!!" || echo "  Clean"
+            echo "--- NF_CONNTRACK (nf_conn struct) ---"
+            grep "CONFIG_NF_CONNTRACK=y" /tmp/final_config.txt && echo "  Present (check if new)" || echo "  Not present"
+            echo "--- BRIDGE_NETFILTER (sk_buff) ---"
+            grep "CONFIG_BRIDGE_NETFILTER=y" /tmp/final_config.txt && echo "  Present (check if new)" || echo "  Not present"
+            echo "--- NETFILTER_NETLINK (adds to core) ---"
+            grep "CONFIG_NETFILTER_NETLINK=y" /tmp/final_config.txt && echo "  Present (check if new)" || echo "  Not present"
           else
-            echo "ERROR: No .config found in out/ directory!"
-            echo "Build may have failed before config generation."
-            find kernel_workspace/out/ -type f 2>/dev/null | head -20
+            echo "ERROR: No .config found"
           fi
-          echo "=============================================="
 
       - name: Verify Kernel Build
         run: |
@@ -451,49 +355,24 @@ jobs:
             echo "ERROR: Image.gz too small!"
             exit 1
           fi
-          echo "Kernel built successfully!"
+          echo "Build OK"
 
-      # ============================================
-      # DIAGNOSTIC: Inspect AnyKernel3
-      # ============================================
-      - name: "[DIAG] Inspect AnyKernel3"
+      - name: Package and Upload
         run: |
           git clone https://github.com/darklord4567/Anykernel3_AOSP_NORD3.git --depth=1 Anykernel3_Zabixii
-          echo "=============================================="
-          echo "  ANYKERNEL3 INSPECTION"
-          echo "=============================================="
-          echo ""
-          echo "=== anykernel.sh header ==="
-          head -50 Anykernel3_Zabixii/anykernel.sh
-          echo ""
-          echo "=== Partition targets ==="
-          grep -i "block\|partition\|slot\|boot\|kernel" Anykernel3_Zabixii/anykernel.sh || echo "Not found"
-          echo ""
-          echo "=== Device check ==="
-          grep -i "device\|model\|board\|platform" Anykernel3_Zabixii/anykernel.sh || echo "Not found"
-          echo ""
-          echo "=== All files in AnyKernel3 ==="
-          find Anykernel3_Zabixii/ -type f | sort
-          echo "=============================================="
-
-      - name: Create Package
-        run: |
           cp kernel_workspace/out/android12-5.10/kernel-5.10/arch/arm64/boot/Image.gz Anykernel3_Zabixii/Image.gz
 
-      # ============================================
-      # UPLOAD EVERYTHING
-      # ============================================
       - name: Upload Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: "DIAG_L${{ github.event.inputs.DIAG_LEVEL }}_Kernel"
+          name: "DIAG_${{ github.event.inputs.DIAG_LEVEL }}_Kernel"
           path: ./Anykernel3_Zabixii/*
 
-      - name: Upload Final Config
+      - name: Upload Diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: "DIAG_L${{ github.event.inputs.DIAG_LEVEL }}_Config"
+          name: "DIAG_${{ github.event.inputs.DIAG_LEVEL }}_Config"
           path: |
             /tmp/final_config.txt
             /tmp/gki_defconfig.stock
@@ -501,39 +380,30 @@ jobs:
             /tmp/new_builtins.txt
             /tmp/build.log
 
-      - name: "[DIAG] Summary"
+      - name: "[DIAG] Instructions"
         if: always()
         run: |
           echo "=============================================="
-          echo "  DIAGNOSTIC COMPLETE - Level ${{ github.event.inputs.DIAG_LEVEL }}"
+          echo "  Group ${{ github.event.inputs.DIAG_LEVEL }} built."
           echo "=============================================="
           echo ""
-          echo "NEXT STEPS:"
+          echo "1. Flash and test boot."
           echo ""
-          echo "1. Flash this kernel and check if it boots."
+          echo "2. ALSO: Download DIAG_Config artifact NOW."
+          echo "   Even before flashing, open new_builtins.txt."
+          echo "   Those are configs your =m selections secretly"
+          echo "   forced to =y. Share that file."
           echo ""
-          echo "2. Download the DIAG_Config artifact and inspect:"
-          echo "   - final_config.txt: What was ACTUALLY compiled"
-          echo "   - new_builtins.txt: =y configs not in stock"
-          echo "     (THESE are your bootloop suspects)"
-          echo "   - build.log: Which compiler was actually used"
+          echo "3. Results matrix:"
+          echo "   3A boots → test 3B"
+          echo "   3A bootloops → WiFi configs are the problem"
+          echo "     (likely CFG80211=m selecting WIRELESS_EXT=y)"
+          echo "   3B boots → test 3C"
+          echo "   3C bootloops → BRIDGE=m selecting BRIDGE_NETFILTER=y"
+          echo "     (modifies sk_buff struct)"
+          echo "   3F bootloops → SQUASHFS_XZ=y or SQUASHFS_LZO=y"
+          echo "     (bool sub-options forcing parent changes)"
           echo ""
-          echo "3. If Level 0 bootloops:"
-          echo "   → Problem is kernel source, build.config,"
-          echo "     toolchain in build.sh, or AnyKernel3"
-          echo "   → Check anykernel.sh partition targeting"
-          echo "   → Check if your ROM firmware matches this"
-          echo "     kernel source version"
-          echo ""
-          echo "4. If Level 0 boots but Level 1 bootloops:"
-          echo "   → One of the vendor patches is wrong"
-          echo "   → task_mmu.c goto removal is most suspect"
-          echo ""
-          echo "5. If Level 2 boots but Level 3 bootloops:"
-          echo "   → A =m config has a hidden Kconfig 'select'"
-          echo "     that forces a =y struct change"
-          echo "   → Check new_builtins.txt for the answer"
-          echo ""
-          echo "6. Share the DIAG_Config artifact contents"
-          echo "   for further analysis."
+          echo "4. When you find the broken group, share"
+          echo "   new_builtins.txt and we split it further."
           echo "=============================================="
