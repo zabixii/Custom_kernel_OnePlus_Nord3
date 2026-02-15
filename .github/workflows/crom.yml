@@ -1,16 +1,12 @@
 # ============================================
-# Zabixii Kernel Build Workflow
-# Version: 3.0.0
+# Zabixii - Capture Booting Config
+# Version: CAPTURE-1.0
 # ============================================
-# ROOT CAUSE FIX:
-#   NEVER append to gki_defconfig.
-#   Use scripts/config to modify .config AFTER
-#   defconfig generation. This bypasses Kconfig
-#   re-resolution and avoids the select chains
-#   that force dangerous =y configs.
+# Builds Level 2 (confirmed boots) and uploads
+# the final .config for manual editing
 # ============================================
 
-name: Build OnePlus Nord 3 AOSP - Zabixii (NetHunter)
+name: CAPTURE - Booting Config
 
 on:
   workflow_dispatch:
@@ -25,29 +21,14 @@ on:
         description: "Custom kernel suffix"
         required: false
         default: "Zabixii"
-      NETHUNTER:
-        type: boolean
-        description: "Enable NetHunter kernel support?"
-        required: true
-        default: true
 
 jobs:
-  build:
-    name: "[MAGISK]${{ github.event.inputs.NETHUNTER == 'true' && ' [NH]' || '' }} ${{ github.event.inputs.SUFFIX }}"
+  capture:
+    name: "Capture booting .config"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Show Build Configuration
-        run: |
-          echo "=============================================="
-          echo "  Zabixii Kernel Build v3.0.0"
-          echo "  FIX: scripts/config instead of gki_defconfig"
-          echo "=============================================="
-          echo "SUFFIX: ${{ github.event.inputs.SUFFIX }}"
-          echo "NETHUNTER: ${{ github.event.inputs.NETHUNTER }}"
-          echo "=============================================="
 
       - name: Set Environment Variables
         run: |
@@ -160,135 +141,82 @@ jobs:
           cd kernel_workspace/kernel-5.10
           sed -i 's/check_defconfig//' ./build.config.gki
 
-      # ============================================
-      # KEY FIX: Inject NetHunter configs via
-      # POST_DEFCONFIG_CMDS using scripts/config
-      # This modifies .config AFTER defconfig
-      # without triggering Kconfig re-resolution
-      # ============================================
-      - name: Setup NetHunter Config Injection
-        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
-        run: |
-          cd kernel_workspace/kernel-5.10
-          
-          # Create a script that will be called by POST_DEFCONFIG_CMDS
-          cat > nethunter_inject.sh << 'SCRIPT'
-          #!/bin/bash
-          # This runs AFTER defconfig, modifying .config directly
-          # No Kconfig re-resolution = no dangerous select chains
-          
-          SCRIPTS_CONFIG="${ROOT_DIR}/${KERNEL_DIR}/scripts/config"
-          CONFIG_FILE="${OUT_DIR}/.config"
-          
-          echo "=============================================="
-          echo "  NetHunter v3.0.0 - scripts/config injection"
-          echo "  Bypassing Kconfig select chains"
-          echo "=============================================="
-          
-          # WiFi - as modules
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_CFG80211
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_MAC80211
-          
-          # MT76 WiFi
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_MT76_CORE
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_MT76_USB
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_MT76x02_LIB
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_MT76x02_USB
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_MT76x2_COMMON
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_MT76x2U
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_MT7601U
-          
-          # ATH9K WiFi
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_ATH_COMMON
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_ATH9K
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_ATH9K_HW
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_ATH9K_COMMON
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_ATH9K_HTC
-          
-          # RT2800 WiFi
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_RT2X00
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_RT2800_LIB
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_RT2800USB
-          
-          # Realtek WiFi
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_RTL8XXXU
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_RTL8187
-          
-          # USB HID - as modules
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_USB_CONFIGFS_F_HID
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_USB_F_HID
-          
-          # USB Serial - as modules
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_USB_SERIAL_CH341
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_USB_SERIAL_CP210X
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_USB_SERIAL_FTDI_SIO
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_USB_SERIAL_PL2303
-          
-          # Networking - as modules
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_TUN
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_VETH
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_BRIDGE
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_VLAN_8021Q
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_MACVLAN
-          
-          # Bluetooth - as modules
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_BT_RFCOMM
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_BT_BNEP
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_BT_HIDP
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_BT_HCIBTUSB
-          
-          # PPP/VPN - as modules
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_PPP
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_PPP_DEFLATE
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_PPP_MPPE
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_PPTP
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_PPPOE
-          
-          # Filesystems - as modules
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_OVERLAY_FS
-          ${SCRIPTS_CONFIG} --file ${CONFIG_FILE} --module CONFIG_SQUASHFS
-          
-          echo "NetHunter configs injected via scripts/config"
-          echo "=============================================="
-          SCRIPT
-          
-          chmod +x nethunter_inject.sh
-          
-          # Modify build.config.oplus6983 to call our script
-          # Add to POST_DEFCONFIG_CMDS
-          if grep -q "POST_DEFCONFIG_CMDS" build.config.oplus6983; then
-            # Append to existing POST_DEFCONFIG_CMDS
-            sed -i 's|POST_DEFCONFIG_CMDS="\(.*\)"|POST_DEFCONFIG_CMDS="\1 \&\& ${KERNEL_DIR}/nethunter_inject.sh"|' build.config.oplus6983
-          else
-            # Add new POST_DEFCONFIG_CMDS
-            echo 'POST_DEFCONFIG_CMDS="${KERNEL_DIR}/nethunter_inject.sh"' >> build.config.oplus6983
-          fi
-          
-          echo "POST_DEFCONFIG_CMDS configured to inject NetHunter configs"
-          cat build.config.oplus6983
-
       - name: Clean and Build
         run: |
           cd kernel_workspace/
           rm -rf out/
           ./build/build.sh 2>&1 | tee /tmp/build.log
 
-      - name: Verify No Dangerous Configs
+      - name: Capture All Config Files
         if: always()
         run: |
-          FINAL_CONFIG=$(find kernel_workspace/out/ -name ".config" -type f 2>/dev/null | head -1)
-          if [ -n "$FINAL_CONFIG" ]; then
-            echo "=== Checking for KMI-breaking configs ==="
-            echo ""
-            echo "--- Namespaces (must NOT be =y if not in stock) ---"
-            grep -E "CONFIG_(NET_NS|PID_NS|IPC_NS|UTS_NS|USER_NS)=" "$FINAL_CONFIG" || echo "None found"
-            echo ""
-            echo "--- WEXT (must NOT be =y) ---"
-            grep -E "CONFIG_(WIRELESS_EXT|WEXT_CORE|WEXT_PROC|WEXT_PRIV|WEXT_SPY|CFG80211_WEXT)=" "$FINAL_CONFIG" || echo "None found"
-            echo ""
-            echo "--- Our NetHunter configs (should be =m) ---"
-            grep -E "CONFIG_(CFG80211|MAC80211|USB_F_HID|OVERLAY_FS|TUN|BRIDGE)=" "$FINAL_CONFIG" || echo "None found"
+          mkdir -p /tmp/captured_configs
+          
+          # Find and copy the final .config
+          find kernel_workspace/out/ -name ".config" -type f | while read f; do
+            DIR=$(echo "$f" | sed 's|kernel_workspace/out/||' | sed 's|/\.config||' | tr '/' '_')
+            cp "$f" "/tmp/captured_configs/config_${DIR}.txt"
+            echo "Captured: $f -> config_${DIR}.txt"
+          done
+          
+          # Copy the stock gki_defconfig for reference
+          cp kernel_workspace/kernel-5.10/arch/arm64/configs/gki_defconfig /tmp/captured_configs/stock_gki_defconfig.txt
+          
+          # Copy build.config files
+          cp kernel_workspace/kernel-5.10/build.config.oplus6983 /tmp/captured_configs/build_config_oplus6983.txt
+          cp kernel_workspace/kernel-5.10/build.config.gki /tmp/captured_configs/build_config_gki.txt 2>/dev/null || true
+          
+          echo ""
+          echo "=== All captured configs ==="
+          ls -la /tmp/captured_configs/
+
+      - name: Analyze Config for NetHunter Readiness
+        if: always()
+        run: |
+          CONFIG=$(find /tmp/captured_configs/ -name "config_*.txt" | head -1)
+          if [ -z "$CONFIG" ]; then
+            echo "No config found!"
+            exit 0
           fi
+          
+          echo "=============================================="
+          echo "  BOOTING CONFIG ANALYSIS"
+          echo "  File: $CONFIG"
+          echo "  Lines: $(wc -l < "$CONFIG")"
+          echo "=============================================="
+          echo ""
+          
+          echo "=== Current NetHunter-relevant configs ==="
+          echo ""
+          echo "--- WiFi framework ---"
+          grep -E "CONFIG_(CFG80211|MAC80211|WIRELESS|WEXT|RFKILL)=" "$CONFIG" | sort || echo "  None"
+          echo ""
+          echo "--- USB ---"
+          grep -E "CONFIG_USB_(F_HID|CONFIGFS_F_HID|SERIAL)=" "$CONFIG" | sort || echo "  None"
+          echo ""
+          echo "--- Networking ---"
+          grep -E "CONFIG_(TUN|VETH|BRIDGE|VLAN_8021Q|MACVLAN)=" "$CONFIG" | sort || echo "  None"
+          echo ""
+          echo "--- Bluetooth ---"
+          grep -E "CONFIG_BT_(RFCOMM|BNEP|HIDP|HCIBTUSB)=" "$CONFIG" | sort || echo "  None"
+          echo ""
+          echo "--- PPP ---"
+          grep -E "CONFIG_(PPP|PPTP|PPPOE)=" "$CONFIG" | sort || echo "  None"
+          echo ""
+          echo "--- Filesystems ---"
+          grep -E "CONFIG_(OVERLAY_FS|SQUASHFS)=" "$CONFIG" | sort || echo "  None"
+          echo ""
+          echo "--- Namespaces ---"
+          grep -E "CONFIG_(NET_NS|PID_NS|IPC_NS|UTS_NS|USER_NS|TIME_NS)=" "$CONFIG" | sort || echo "  None"
+          echo ""
+          echo "=============================================="
+          echo "  NEXT STEP:"
+          echo "  1. Download captured_configs artifact"
+          echo "  2. Open the config_*.txt file"
+          echo "  3. Add NetHunter =m lines manually"
+          echo "  4. Commit to your repo as custom defconfig"
+          echo "  5. Build using that defconfig directly"
+          echo "=============================================="
 
       - name: Verify Kernel Build
         run: |
@@ -299,31 +227,14 @@ jobs:
           fi
           SIZE=$(stat -c%s "$IMAGE")
           echo "Image.gz: $SIZE bytes ($(($SIZE / 1024 / 1024)) MB)"
-          if [ "$SIZE" -lt 1000000 ]; then
-            echo "ERROR: Image.gz too small!"
-            exit 1
-          fi
           echo "Build OK"
 
-      - name: Package
-        run: |
-          git clone https://github.com/darklord4567/Anykernel3_AOSP_NORD3.git --depth=1 Anykernel3_Zabixii
-          cp kernel_workspace/out/android12-5.10/kernel-5.10/arch/arm64/boot/Image.gz Anykernel3_Zabixii/Image.gz
-
-      - name: Set Artifact Suffix
-        id: suffix
-        run: |
-          SUFFIX="_MAGISK"
-          if [ "${{ github.event.inputs.NETHUNTER }}" = "true" ]; then
-            SUFFIX="${SUFFIX}_NH"
-          fi
-          echo "value=${SUFFIX}" >> $GITHUB_OUTPUT
-
-      - name: Upload Kernel
+      - name: Upload Captured Configs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: "Zabixii_Kernel${{ steps.suffix.outputs.value }}_by_Zabixii"
-          path: ./Anykernel3_Zabixii/*
+          name: "Captured_Booting_Configs"
+          path: /tmp/captured_configs/*
 
       - name: Upload Build Log
         if: always()
