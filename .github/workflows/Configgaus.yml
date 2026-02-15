@@ -1,12 +1,15 @@
 # ============================================
 # Zabixii Kernel Build Workflow
-# Version: 3.2.1 - Direct Config Injection
+# Version: 3.3.0 - Skip olddefconfig
 # ============================================
-# FIX: Checkout moved after maximize-build-space
-# (LVM mount was wiping checked-out files)
+# FIXES:
+# - Removed BRIDGE, VETH, USB_F_HID,
+#   USB_CONFIGFS_F_HID, PPTP (forced to =y)
+# - Patched build.sh to skip make olddefconfig
+#   so our config is used EXACTLY as-is
 # ============================================
 
-name: Build Zabixii v3.2.1 - Direct Config
+name: Build Zabixii v3.3.0
 
 on:
   workflow_dispatch:
@@ -35,8 +38,8 @@ jobs:
       - name: Show Build Configuration
         run: |
           echo "=============================================="
-          echo "  Zabixii Kernel Build v3.2.1"
-          echo "  Direct Config - No Kconfig Resolution"
+          echo "  Zabixii Kernel Build v3.3.0"
+          echo "  Direct Config + Skip olddefconfig"
           echo "=============================================="
           echo "SUFFIX: ${{ github.event.inputs.SUFFIX }}"
           echo "NETHUNTER: ${{ github.event.inputs.NETHUNTER }}"
@@ -69,63 +72,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: "[STEP 1] Verify booting config exists"
+      - name: "[STEP 1] Verify booting config"
         run: |
-          echo "=== Repo root ==="
           ls -la
-          echo ""
           CONFIG_FILE="./config_android12-5.10_kernel-5.10.txt"
           if [ ! -f "$CONFIG_FILE" ]; then
-            echo "ERROR: config_android12-5.10_kernel-5.10.txt not found!"
+            echo "ERROR: config not found!"
             exit 1
           fi
-          echo "Booting config found!"
-          echo "Lines: $(wc -l < "$CONFIG_FILE")"
-          echo "Size: $(stat -c%s "$CONFIG_FILE") bytes"
+          echo "Config found: $(wc -l < "$CONFIG_FILE") lines"
 
-      - name: "[STEP 2] Analyze current NetHunter-relevant configs"
-        run: |
-          CONFIG_FILE="./config_android12-5.10_kernel-5.10.txt"
-          echo "=============================================="
-          echo "  ANALYZING BOOTING CONFIG"
-          echo "=============================================="
-          echo ""
-          echo "=== Already present ==="
-          echo ""
-          echo "--- WiFi ---"
-          grep -E "^CONFIG_(CFG80211|MAC80211|WIRELESS|WIRELESS_EXT|WEXT_CORE|WEXT_PROC|WEXT_PRIV|WEXT_SPY|RFKILL)=" "$CONFIG_FILE" || echo "  None"
-          echo ""
-          echo "--- USB ---"
-          grep -E "^CONFIG_USB_(F_HID|CONFIGFS_F_HID|SERIAL|GADGET)=" "$CONFIG_FILE" || echo "  None"
-          echo ""
-          echo "--- Networking ---"
-          grep -E "^CONFIG_(TUN|VETH|BRIDGE|VLAN_8021Q|MACVLAN)=" "$CONFIG_FILE" || echo "  None"
-          echo ""
-          echo "--- Bluetooth ---"
-          grep -E "^CONFIG_BT_(RFCOMM|BNEP|HIDP|HCIBTUSB)=" "$CONFIG_FILE" || echo "  None"
-          echo ""
-          echo "--- PPP ---"
-          grep -E "^CONFIG_(PPP|PPP_DEFLATE|PPP_MPPE|PPTP|PPPOE)=" "$CONFIG_FILE" || echo "  None"
-          echo ""
-          echo "--- Filesystems ---"
-          grep -E "^CONFIG_(OVERLAY_FS|SQUASHFS)=" "$CONFIG_FILE" || echo "  None"
-          echo ""
-          echo "--- Namespaces ---"
-          grep -E "^CONFIG_(NET_NS|PID_NS|IPC_NS|UTS_NS|USER_NS)=" "$CONFIG_FILE" || echo "  None"
-          echo ""
-          echo "=== Disabled / Not Set ==="
-          grep -E "^# CONFIG_(MAC80211|USB_F_HID|USB_CONFIGFS_F_HID|USB_SERIAL|VETH|BRIDGE|VLAN_8021Q|MACVLAN|BT_HCIBTUSB|PPTP|PPPOE|SQUASHFS|MT76|MT7601U|ATH9K|RT2X00|RT2800|RTL8XXXU|RTL8187) is not set" "$CONFIG_FILE" || echo "  None found"
-          echo "=============================================="
-
-      - name: "[STEP 3] Patch config with NetHunter modules"
+      - name: "[STEP 2] Patch config with NetHunter modules"
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           CONFIG_FILE="./config_android12-5.10_kernel-5.10.txt"
           WORK_CONFIG="/tmp/nethunter_config.txt"
-          
           cp "$CONFIG_FILE" "$WORK_CONFIG"
-          echo "Original config: $(wc -l < "$WORK_CONFIG") lines"
-          echo ""
+          echo "Original: $(wc -l < "$WORK_CONFIG") lines"
           
           add_module_config() {
             local CONFIG_NAME="$1"
@@ -139,11 +102,11 @@ jobs:
             fi
             if grep -q "^# ${CONFIG_NAME} is not set" "$WORK_CONFIG"; then
               sed -i "s|^# ${CONFIG_NAME} is not set|${CONFIG_NAME}=m|" "$WORK_CONFIG"
-              echo "  REPLACED $CONFIG_NAME (was 'not set' -> =m)"
+              echo "  REPLACED $CONFIG_NAME (not set -> =m)"
               return
             fi
             echo "${CONFIG_NAME}=m" >> "$WORK_CONFIG"
-            echo "  ADDED $CONFIG_NAME=m (was missing)"
+            echo "  ADDED $CONFIG_NAME=m"
           }
           
           add_bool_config() {
@@ -154,16 +117,23 @@ jobs:
             fi
             if grep -q "^# ${CONFIG_NAME} is not set" "$WORK_CONFIG"; then
               sed -i "s|^# ${CONFIG_NAME} is not set|${CONFIG_NAME}=y|" "$WORK_CONFIG"
-              echo "  REPLACED $CONFIG_NAME (was 'not set' -> =y)"
+              echo "  REPLACED $CONFIG_NAME (not set -> =y)"
               return
             fi
             echo "${CONFIG_NAME}=y" >> "$WORK_CONFIG"
-            echo "  ADDED $CONFIG_NAME=y (bool sub-option)"
+            echo "  ADDED $CONFIG_NAME=y"
           }
           
           echo "=============================================="
-          echo "  ADDING NETHUNTER CONFIGS"
+          echo "  ADDING NETHUNTER CONFIGS (SAFE ONLY)"
           echo "=============================================="
+          echo ""
+          echo "  EXCLUDED (Kconfig forces =y, breaks KMI):"
+          echo "    CONFIG_BRIDGE"
+          echo "    CONFIG_VETH"
+          echo "    CONFIG_USB_CONFIGFS_F_HID"
+          echo "    CONFIG_USB_F_HID"
+          echo "    CONFIG_PPTP"
           echo ""
           
           echo "--- MAC80211 WiFi framework ---"
@@ -206,11 +176,6 @@ jobs:
           add_module_config "CONFIG_RTL8187"
           echo ""
           
-          echo "--- USB HID (BadUSB/DuckHunter) ---"
-          add_module_config "CONFIG_USB_CONFIGFS_F_HID"
-          add_module_config "CONFIG_USB_F_HID"
-          echo ""
-          
           echo "--- USB Serial adapters ---"
           add_module_config "CONFIG_USB_SERIAL"
           add_module_config "CONFIG_USB_SERIAL_CH341"
@@ -219,9 +184,7 @@ jobs:
           add_module_config "CONFIG_USB_SERIAL_PL2303"
           echo ""
           
-          echo "--- Networking ---"
-          add_module_config "CONFIG_VETH"
-          add_module_config "CONFIG_BRIDGE"
+          echo "--- Networking (safe only) ---"
           add_module_config "CONFIG_VLAN_8021Q"
           add_module_config "CONFIG_MACVLAN"
           echo ""
@@ -230,8 +193,7 @@ jobs:
           add_module_config "CONFIG_BT_HCIBTUSB"
           echo ""
           
-          echo "--- PPP/VPN extras ---"
-          add_module_config "CONFIG_PPTP"
+          echo "--- PPP/VPN (safe only) ---"
           add_module_config "CONFIG_PPPOE"
           echo ""
           
@@ -242,67 +204,24 @@ jobs:
           echo ""
           
           echo "=============================================="
-          echo "  PATCHING SUMMARY"
-          echo "=============================================="
-          echo "Final config: $(wc -l < "$WORK_CONFIG") lines"
+          echo "Final: $(wc -l < "$WORK_CONFIG") lines"
           echo "Original =y: $(grep -c '=y' "$CONFIG_FILE")"
-          echo "Final =y: $(grep -c '=y' "$WORK_CONFIG")"
+          echo "Patched =y: $(grep -c '=y' "$WORK_CONFIG")"
           echo "Original =m: $(grep -c '=m' "$CONFIG_FILE")"
-          echo "Final =m: $(grep -c '=m' "$WORK_CONFIG")"
+          echo "Patched =m: $(grep -c '=m' "$WORK_CONFIG")"
           echo "=============================================="
 
-      - name: "[STEP 3-ALT] Copy booting config as-is (no NetHunter)"
+      - name: "[STEP 2-ALT] Copy config as-is (no NetHunter)"
         if: ${{ github.event.inputs.NETHUNTER != 'true' }}
         run: |
           cp "./config_android12-5.10_kernel-5.10.txt" /tmp/nethunter_config.txt
 
-      - name: "[STEP 4] Verify config safety"
-        run: |
-          CONFIG="/tmp/nethunter_config.txt"
-          ORIG="./config_android12-5.10_kernel-5.10.txt"
-          echo "=============================================="
-          echo "  CONFIG SAFETY CHECK"
-          echo "=============================================="
-          echo ""
-          echo "--- All =m configs (NetHunter modules) ---"
-          grep "=m" "$CONFIG" | sort
-          echo ""
-          echo "Count: $(grep -c '=m' "$CONFIG") module configs"
-          echo ""
-          echo "--- Checking no =y was changed ---"
-          ORIG_Y=$(grep "=y" "$ORIG" | sort)
-          NEW_Y=$(grep "=y" "$CONFIG" | sort)
-          
-          REMOVED_Y=$(comm -23 <(echo "$ORIG_Y") <(echo "$NEW_Y"))
-          if [ -n "$REMOVED_Y" ]; then
-            echo "ERROR: These =y configs were changed/removed:"
-            echo "$REMOVED_Y"
-          else
-            echo "OK: No =y configs were modified"
-          fi
-          echo ""
-          
-          NEW_BUILTINS=$(comm -13 <(echo "$ORIG_Y") <(echo "$NEW_Y"))
-          if [ -n "$NEW_BUILTINS" ]; then
-            echo "NEW =y configs (should be bool sub-options only):"
-            echo "$NEW_BUILTINS"
-          else
-            echo "No new =y configs"
-          fi
-          echo "=============================================="
-
-      # ============================================
-      # Upload the patched config BEFORE building
-      # ============================================
       - name: Upload Patched Config
         uses: actions/upload-artifact@v4
         with:
-          name: "Patched_NetHunter_Config"
+          name: "Patched_Config"
           path: /tmp/nethunter_config.txt
 
-      # ============================================
-      # Now build the kernel
-      # ============================================
       - name: Configure Git
         run: |
           git config --global user.name "zabixii"
@@ -391,16 +310,53 @@ jobs:
           sed -i 's/check_defconfig//' ./build.config.gki
 
       # ============================================
-      # Inject patched config via POST_DEFCONFIG_CMDS
+      # KEY FIX: Patch build.sh to skip olddefconfig
+      # AND inject our config
       # ============================================
-      - name: "[STEP 5] Setup config injection"
+      - name: "[STEP 5] Patch build.sh and setup config injection"
         run: |
-          cd kernel_workspace/kernel-5.10
+          cd kernel_workspace
+          
+          # Find build.sh
+          BUILD_SH="./build/build.sh"
+          if [ ! -f "$BUILD_SH" ]; then
+            echo "ERROR: build.sh not found!"
+            find . -name "build.sh" -type f | head -5
+            exit 1
+          fi
+          
+          echo "=== build.sh found ==="
+          echo ""
+          
+          # Show what olddefconfig looks like in build.sh
+          echo "=== Lines containing olddefconfig ==="
+          grep -n "olddefconfig" "$BUILD_SH" || echo "Not found directly"
+          echo ""
+          
+          echo "=== Lines containing POST_DEFCONFIG ==="
+          grep -n "POST_DEFCONFIG" "$BUILD_SH" || echo "Not found"
+          echo ""
+          
+          # Comment out ALL occurrences of make olddefconfig
+          # This prevents Kconfig from re-resolving our config
+          sed -i 's|make.*olddefconfig|echo "SKIPPED: make olddefconfig (v3.3.0)"|g' "$BUILD_SH"
+          
+          # Also handle any ${MAKE} olddefconfig variations
+          sed -i 's|\${MAKE}.*olddefconfig|echo "SKIPPED: \${MAKE} olddefconfig (v3.3.0)"|g' "$BUILD_SH"
+          
+          # Verify the patch
+          echo "=== After patching ==="
+          grep -n "olddefconfig\|SKIPPED.*olddefconfig" "$BUILD_SH"
+          echo ""
+          
+          # Now setup config injection via POST_DEFCONFIG_CMDS
+          cd kernel-5.10
           
           cat > inject_config.sh << 'INJECT_SCRIPT'
           #!/bin/bash
           echo "=============================================="
-          echo "  INJECTING PATCHED CONFIG"
+          echo "  INJECTING PATCHED CONFIG v3.3.0"
+          echo "  olddefconfig is DISABLED"
           echo "=============================================="
           
           TARGET_CONFIG="${OUT_DIR}/.config"
@@ -416,12 +372,15 @@ jobs:
             exit 1
           fi
           
-          cp "$TARGET_CONFIG" "${OUT_DIR}/.config.original"
+          # Save original for comparison
+          cp "$TARGET_CONFIG" "${OUT_DIR}/.config.before_inject"
+          
+          # Replace with our patched config
           cp "$SOURCE_CONFIG" "$TARGET_CONFIG"
           
           echo "Config injected!"
-          echo "Original: $(wc -l < "${OUT_DIR}/.config.original") lines"
-          echo "Injected: $(wc -l < "$TARGET_CONFIG") lines"
+          echo "Before: $(wc -l < "${OUT_DIR}/.config.before_inject") lines, $(grep -c '=y' "${OUT_DIR}/.config.before_inject") =y"
+          echo "After:  $(wc -l < "$TARGET_CONFIG") lines, $(grep -c '=y' "$TARGET_CONFIG") =y"
           echo "=============================================="
           INJECT_SCRIPT
           
@@ -433,61 +392,69 @@ jobs:
             echo 'POST_DEFCONFIG_CMDS="${KERNEL_DIR}/inject_config.sh"' >> build.config.oplus6983
           fi
           
-          echo "=== Modified build.config.oplus6983 ==="
+          echo "=== build.config.oplus6983 ==="
           cat build.config.oplus6983
 
-      # ============================================
-      # Build
-      # ============================================
       - name: "[STEP 6] Clean and Build"
         run: |
           cd kernel_workspace/
           rm -rf out/
           ./build/build.sh 2>&1 | tee /tmp/build.log
 
-      # ============================================
-      # Verify
-      # ============================================
-      - name: "[STEP 7] Verify config was actually used"
+      - name: "[STEP 7] Verify config integrity"
         if: always()
         run: |
           echo "=============================================="
-          echo "  POST-BUILD CONFIG VERIFICATION"
+          echo "  POST-BUILD CONFIG VERIFICATION v3.3.0"
           echo "=============================================="
           
           FINAL_CONFIG=$(find kernel_workspace/out/ -name ".config" -type f 2>/dev/null | head -1)
           ORIG="./config_android12-5.10_kernel-5.10.txt"
+          PATCHED="/tmp/nethunter_config.txt"
           
           if [ -n "$FINAL_CONFIG" ]; then
             cp "$FINAL_CONFIG" /tmp/final_built_config.txt
-            echo "Final .config: $FINAL_CONFIG"
-            echo "Lines: $(wc -l < "$FINAL_CONFIG")"
+            
+            echo "--- Config line counts ---"
+            echo "Original booting: $(wc -l < "$ORIG") lines"
+            echo "Patched (our):    $(wc -l < "$PATCHED") lines"
+            echo "Final (built):    $(wc -l < "$FINAL_CONFIG") lines"
             echo ""
             
-            echo "--- NetHunter =m configs in final build ---"
-            grep -E "CONFIG_(MAC80211|MT76|MT7601U|ATH9K|RT2X00|RT2800|RTL8|USB_F_HID|USB_CONFIGFS_F_HID|USB_SERIAL|VETH|BRIDGE|VLAN_8021Q|MACVLAN|BT_HCIBTUSB|PPTP|PPPOE|SQUASHFS)=" "$FINAL_CONFIG" | sort
+            echo "--- =y counts ---"
+            echo "Original: $(grep -c '=y' "$ORIG")"
+            echo "Patched:  $(grep -c '=y' "$PATCHED")"
+            echo "Final:    $(grep -c '=y' "$FINAL_CONFIG")"
             echo ""
             
-            echo "--- =y count comparison ---"
-            ORIG_Y_COUNT=$(grep -c "=y" "$ORIG")
-            FINAL_Y_COUNT=$(grep -c "=y" "$FINAL_CONFIG")
-            FINAL_M_COUNT=$(grep -c "=m" "$FINAL_CONFIG")
-            echo "Original =y count: $ORIG_Y_COUNT"
-            echo "Final =y count: $FINAL_Y_COUNT"
-            echo "Final =m count: $FINAL_M_COUNT"
+            echo "--- =m counts ---"
+            echo "Original: $(grep -c '=m' "$ORIG")"
+            echo "Patched:  $(grep -c '=m' "$PATCHED")"
+            echo "Final:    $(grep -c '=m' "$FINAL_CONFIG")"
+            echo ""
             
-            if [ "$FINAL_Y_COUNT" -gt "$((ORIG_Y_COUNT + 10))" ]; then
-              echo ""
-              echo "WARNING: =y count jumped significantly!"
-              echo "make olddefconfig may have re-resolved configs!"
-              echo ""
-              echo "New =y configs:"
-              comm -13 <(grep "=y" "$ORIG" | sort) <(grep "=y" "$FINAL_CONFIG" | sort) | head -30
+            echo "--- Is final config IDENTICAL to patched? ---"
+            if diff -q "$PATCHED" "$FINAL_CONFIG" > /dev/null 2>&1; then
+              echo "YES! Config is EXACTLY what we injected!"
             else
-              echo "OK: =y count is stable"
+              echo "NO! Config was modified after injection!"
+              echo ""
+              echo "Differences (first 30):"
+              diff "$PATCHED" "$FINAL_CONFIG" | head -30
             fi
+            echo ""
+            
+            echo "--- NetHunter configs in final build ---"
+            grep -E "CONFIG_(MAC80211|MT76|MT7601U|ATH9K|RT2X00|RT2800|RTL8|USB_SERIAL|VLAN_8021Q|MACVLAN|BT_HCIBTUSB|PPPOE|SQUASHFS)=" "$FINAL_CONFIG" | sort
+            echo ""
+            
+            echo "--- Checking EXCLUDED configs stayed out ---"
+            for cfg in CONFIG_BRIDGE CONFIG_VETH CONFIG_USB_F_HID CONFIG_USB_CONFIGFS_F_HID CONFIG_PPTP; do
+              RESULT=$(grep "^${cfg}=" "$FINAL_CONFIG" || echo "not set")
+              echo "  $cfg: $RESULT"
+            done
           else
-            echo "ERROR: No .config found in out/!"
+            echo "ERROR: No .config found!"
           fi
           echo "=============================================="
 
@@ -506,9 +473,6 @@ jobs:
           fi
           echo "Kernel build OK"
 
-      # ============================================
-      # Package
-      # ============================================
       - name: "[STEP 8] Create AnyKernel3 Package"
         run: |
           git clone https://github.com/darklord4567/Anykernel3_AOSP_NORD3.git --depth=1 Anykernel3_Zabixii
@@ -529,11 +493,18 @@ jobs:
           name: "Zabixii_Kernel${{ steps.suffix.outputs.value }}_by_Zabixii"
           path: ./Anykernel3_Zabixii/*
 
+      - name: Upload Patched Config
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "Patched_Config_v3.3.0"
+          path: /tmp/nethunter_config.txt
+
       - name: Upload Final Built Config
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: "Final_Built_Config"
+          name: "Final_Built_Config_v3.3.0"
           path: /tmp/final_built_config.txt
 
       - name: Upload Build Log
@@ -542,25 +513,3 @@ jobs:
         with:
           name: "Build_Log"
           path: /tmp/build.log
-
-      - name: "[STEP 9] Summary"
-        if: always()
-        run: |
-          echo "=============================================="
-          echo "  ARTIFACTS UPLOADED"
-          echo "=============================================="
-          echo ""
-          echo "  1. Patched_NetHunter_Config"
-          echo "     -> The config file with NetHunter =m added"
-          echo "     -> Downloaded BEFORE build starts"
-          echo ""
-          echo "  2. Zabixii_Kernel"
-          echo "     -> Flash via Franco Kernel Manager"
-          echo ""
-          echo "  3. Final_Built_Config"
-          echo "     -> The ACTUAL .config after build"
-          echo "     -> Compare with Patched to verify"
-          echo ""
-          echo "  4. Build_Log"
-          echo "     -> Full build output"
-          echo "=============================================="
