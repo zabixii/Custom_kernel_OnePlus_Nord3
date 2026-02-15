@@ -1,0 +1,630 @@
+# ============================================
+# Zabixii Kernel Build Workflow
+# Version: 3.2.0 - Direct Config Injection
+# ============================================
+# Strategy:
+#   1. Use the booting .config from repo
+#   2. Append NetHunter =m lines via echo >>
+#   3. Skip make defconfig / make olddefconfig
+#   4. Build directly from the pre-edited .config
+# ============================================
+
+name: Build Zabixii v3.2.0 - Direct Config
+
+on:
+  workflow_dispatch:
+    inputs:
+      FILE:
+        type: string
+        description: "Configuration file"
+        required: true
+        default: manifest_aosp
+      SUFFIX:
+        type: string
+        description: "Custom kernel suffix"
+        required: false
+        default: "Zabixii"
+      NETHUNTER:
+        type: boolean
+        description: "Enable NetHunter kernel support?"
+        required: true
+        default: true
+
+jobs:
+  build:
+    name: "[MAGISK]${{ github.event.inputs.NETHUNTER == 'true' && ' [NH]' || '' }} ${{ github.event.inputs.SUFFIX }}"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Build Configuration
+        run: |
+          echo "=============================================="
+          echo "  Zabixii Kernel Build v3.2.0"
+          echo "  Direct Config - No Kconfig Resolution"
+          echo "=============================================="
+          echo "SUFFIX: ${{ github.event.inputs.SUFFIX }}"
+          echo "NETHUNTER: ${{ github.event.inputs.NETHUNTER }}"
+          echo "=============================================="
+
+      - name: Set Environment Variables
+        run: |
+          echo "CPU=mt6983" >> $GITHUB_ENV
+          echo "ANDROID_VERSION=android12" >> $GITHUB_ENV
+          echo "KERNEL_VERSION=5.10" >> $GITHUB_ENV
+
+      - name: Maximize Build Space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 8192
+          temp-reserve-mb: 2048
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+
+      - name: Create Swap
+        run: |
+          sudo swapoff -a
+          sudo fallocate -l 3G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "zabixii"
+          git config --global user.email "154690973+zabixii@users.noreply.github.com"
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update -qq
+          sudo apt install -y python3 git curl libelf-dev build-essential flex bison libssl-dev libncurses-dev liblz4-tool zlib1g-dev libxml2-utils rsync unzip llvm lld
+
+      - name: Install Repo Tool
+        run: |
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/repo
+          chmod a+x ~/repo
+          sudo mv ~/repo /usr/local/bin/repo
+
+      - name: Initialize Repo and Sync
+        run: |
+          mkdir kernel_workspace && cd kernel_workspace
+          repo init -u https://github.com/hemasai1109/Custom_kernel_OnePlus_Nord3.git -m ${{ github.event.inputs.FILE }}.xml --depth=1
+          repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle --force-sync
+
+      - name: Copy Build Configuration
+        run: |
+          git clone https://github.com/hemasai1109/Custom_kernel_OnePlus_Nord3.git kernel_workflow
+          cp kernel_workflow/build.config.oplus6983-d kernel_workspace/kernel-5.10/
+          cd kernel_workspace/kernel-5.10
+          mv build.config.oplus6983-d build.config.oplus6983
+
+      - name: Set Build Config Path
+        run: echo "BUILD_CONFIG=kernel-5.10/build.config.oplus6983" >> $GITHUB_ENV
+
+      - name: Fix Vendor Directory
+        run: |
+          cd kernel_workspace
+          mv kernel_module/vendor .
+          rm -rf kernel_module
+
+      # ============================================
+      # LEVEL 1: Vendor fixes (confirmed safe)
+      # ============================================
+      - name: Create Thermal Makefile
+        run: |
+          cd kernel_workspace/vendor/oplus/kernel/cpu/thermal
+          echo "obj-y += horae_shell_temp" > Makefile
+          echo "obj-y += oplus_ipa_thermal" >> Makefile
+
+      - name: Create Fingerprint Makefile
+        run: |
+          cd kernel_workspace/vendor/oplus/secure/biometrics/fingerprints/bsp/drivers_kernel/component3.0/mtk
+          cat > Makefile << 'EOF'
+          obj-$(CONFIG_OPLUS_FINGERPRINT_COMMON) += oplus_fp_common/
+          ifneq ($(CONFIG_OPLUS_FINGERPRINT_GOODIX)_$(CONFIG_OPLUS_FINGERPRINT_GOODIX_OPTICAL), _)
+          obj-y += goodix_optical_fp/
+          endif
+          obj-$(CONFIG_OPLUS_FINGERPRINT_JIIOV_OPTICAL) += anc_driver/
+          obj-$(CONFIG_OPLUS_FINGERPRINT_SILEAD_CAP) += silead/
+          ccflags-$(CONFIG_OPLUS_FINGERPRINT_NAVIGATION_ENABLE) += -DFP_NAVIGATION_ENABLE
+          EOF
+
+      - name: Fix Audio Codec
+        run: |
+          cd kernel_workspace/kernel-5.10/sound/soc/codecs/
+          sed -i 's/^int accdet_read_audio_res(unsigned int res_value)/int mt6357_accdet_read_audio_res(unsigned int res_value)/' mt6357-accdet.c
+          sed -i 's/^EXPORT_SYMBOL(accdet_read_audio_res);/EXPORT_SYMBOL(mt6357_accdet_read_audio_res);/' mt6357-accdet.c
+
+      - name: Fix task_mmu
+        run: |
+          sed -i '/goto show_pad;/d' kernel_workspace/kernel-5.10/fs/proc/task_mmu.c
+
+      # ============================================
+      # LEVEL 2: Suffix (confirmed safe)
+      # ============================================
+      - name: Apply Custom Suffix
+        run: |
+          cd kernel_workspace
+          SUFFIX="${{ github.event.inputs.SUFFIX }}"
+          ANDROID_VERSION="${{ env.ANDROID_VERSION }}"
+          SCRIPT="kernel-${{ env.KERNEL_VERSION }}/scripts/setlocalversion"
+          sed -i 's/ -dirty//g' "$SCRIPT"
+          echo "" >> "$SCRIPT"
+          echo "echo \"-${ANDROID_VERSION}-${SUFFIX}\"" >> "$SCRIPT"
+          echo "exit 0" >> "$SCRIPT"
+          chmod +x "$SCRIPT"
+          cd kernel-${{ env.KERNEL_VERSION }}
+          git add -A
+          git commit -m "Custom suffix: $SUFFIX" || true
+
+      # ============================================
+      # STEP 1: Analyze the booting config
+      # ============================================
+      - name: "[STEP 1] Verify booting config exists"
+        run: |
+          CONFIG_FILE="${GITHUB_WORKSPACE}/config_android12-5.10_kernel-5.10.txt"
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "ERROR: config_android12-5.10_kernel-5.10.txt not found in repo root!"
+            echo "Please commit the booting .config file to the root of your repo."
+            exit 1
+          fi
+          echo "Booting config found!"
+          echo "Lines: $(wc -l < "$CONFIG_FILE")"
+          echo "Size: $(stat -c%s "$CONFIG_FILE") bytes"
+
+      - name: "[STEP 2] Analyze current NetHunter-relevant configs"
+        run: |
+          CONFIG_FILE="${GITHUB_WORKSPACE}/config_android12-5.10_kernel-5.10.txt"
+          echo "=============================================="
+          echo "  ANALYZING BOOTING CONFIG"
+          echo "=============================================="
+          echo ""
+          echo "=== Already =y (DO NOT TOUCH) ==="
+          echo ""
+          echo "--- WiFi ---"
+          grep -E "^CONFIG_(CFG80211|MAC80211|WIRELESS|WIRELESS_EXT|WEXT_CORE|WEXT_PROC|WEXT_PRIV|WEXT_SPY|RFKILL)=" "$CONFIG_FILE" || echo "  None"
+          echo ""
+          echo "--- USB ---"
+          grep -E "^CONFIG_USB_(F_HID|CONFIGFS_F_HID|SERIAL|GADGET)=" "$CONFIG_FILE" || echo "  None"
+          echo ""
+          echo "--- Networking ---"
+          grep -E "^CONFIG_(TUN|VETH|BRIDGE|VLAN_8021Q|MACVLAN)=" "$CONFIG_FILE" || echo "  None"
+          echo ""
+          echo "--- Bluetooth ---"
+          grep -E "^CONFIG_BT_(RFCOMM|BNEP|HIDP|HCIBTUSB)=" "$CONFIG_FILE" || echo "  None"
+          echo ""
+          echo "--- PPP ---"
+          grep -E "^CONFIG_(PPP|PPP_DEFLATE|PPP_MPPE|PPTP|PPPOE)=" "$CONFIG_FILE" || echo "  None"
+          echo ""
+          echo "--- Filesystems ---"
+          grep -E "^CONFIG_(OVERLAY_FS|SQUASHFS)=" "$CONFIG_FILE" || echo "  None"
+          echo ""
+          echo "--- Namespaces ---"
+          grep -E "^CONFIG_(NET_NS|PID_NS|IPC_NS|UTS_NS|USER_NS)=" "$CONFIG_FILE" || echo "  None"
+          echo ""
+          echo "=== Disabled / Not Set ==="
+          echo ""
+          grep -E "^# CONFIG_(MAC80211|USB_F_HID|USB_CONFIGFS_F_HID|USB_SERIAL|VETH|BRIDGE|VLAN_8021Q|MACVLAN|BT_HCIBTUSB|PPTP|PPPOE|SQUASHFS|MT76|MT7601U|ATH9K|RT2X00|RT2800|RTL8XXXU|RTL8187) is not set" "$CONFIG_FILE" || echo "  None found"
+          echo ""
+          echo "=============================================="
+
+      # ============================================
+      # STEP 3: Prepare the config
+      # ============================================
+      - name: "[STEP 3] Copy booting config and add NetHunter modules"
+        if: ${{ github.event.inputs.NETHUNTER == 'true' }}
+        run: |
+          CONFIG_FILE="${GITHUB_WORKSPACE}/config_android12-5.10_kernel-5.10.txt"
+          WORK_CONFIG="/tmp/nethunter_config.txt"
+          
+          # Start with exact copy of booting config
+          cp "$CONFIG_FILE" "$WORK_CONFIG"
+          
+          echo "Original config: $(wc -l < "$WORK_CONFIG") lines"
+          echo ""
+          
+          # ============================================
+          # For each NetHunter config:
+          #   1. Check if it already exists (any form)
+          #   2. If "# CONFIG_xxx is not set" -> replace with =m
+          #   3. If not present at all -> append =m
+          #   4. If already =y or =m -> skip
+          # ============================================
+          
+          add_module_config() {
+            local CONFIG_NAME="$1"
+            local EXISTING
+            
+            # Check if already =y or =m
+            if grep -q "^${CONFIG_NAME}=y" "$WORK_CONFIG"; then
+              echo "  SKIP $CONFIG_NAME (already =y)"
+              return
+            fi
+            if grep -q "^${CONFIG_NAME}=m" "$WORK_CONFIG"; then
+              echo "  SKIP $CONFIG_NAME (already =m)"
+              return
+            fi
+            
+            # Check if "# CONFIG_xxx is not set" -> replace with =m
+            local BARE_NAME=$(echo "$CONFIG_NAME" | sed 's/^CONFIG_//')
+            if grep -q "^# ${CONFIG_NAME} is not set" "$WORK_CONFIG"; then
+              sed -i "s|^# ${CONFIG_NAME} is not set|${CONFIG_NAME}=m|" "$WORK_CONFIG"
+              echo "  REPLACED $CONFIG_NAME (was 'not set' -> =m)"
+              return
+            fi
+            
+            # Not present at all -> append
+            echo "${CONFIG_NAME}=m" >> "$WORK_CONFIG"
+            echo "  ADDED $CONFIG_NAME=m (was missing)"
+          }
+          
+          add_bool_config() {
+            local CONFIG_NAME="$1"
+            
+            if grep -q "^${CONFIG_NAME}=y" "$WORK_CONFIG"; then
+              echo "  SKIP $CONFIG_NAME (already =y)"
+              return
+            fi
+            if grep -q "^# ${CONFIG_NAME} is not set" "$WORK_CONFIG"; then
+              sed -i "s|^# ${CONFIG_NAME} is not set|${CONFIG_NAME}=y|" "$WORK_CONFIG"
+              echo "  REPLACED $CONFIG_NAME (was 'not set' -> =y)"
+              return
+            fi
+            echo "${CONFIG_NAME}=y" >> "$WORK_CONFIG"
+            echo "  ADDED $CONFIG_NAME=y (bool sub-option)"
+          }
+          
+          echo "=============================================="
+          echo "  ADDING NETHUNTER CONFIGS"
+          echo "=============================================="
+          echo ""
+          
+          echo "--- MAC80211 WiFi framework ---"
+          add_module_config "CONFIG_MAC80211"
+          add_bool_config "CONFIG_MAC80211_HAS_RC"
+          add_bool_config "CONFIG_MAC80211_RC_MINSTREL"
+          add_bool_config "CONFIG_MAC80211_RC_DEFAULT_MINSTREL"
+          add_bool_config "CONFIG_MAC80211_MESH"
+          echo ""
+          
+          echo "--- MT76 WiFi drivers ---"
+          add_module_config "CONFIG_MT76_CORE"
+          add_module_config "CONFIG_MT76_USB"
+          add_module_config "CONFIG_MT76x02_LIB"
+          add_module_config "CONFIG_MT76x02_USB"
+          add_module_config "CONFIG_MT76x2_COMMON"
+          add_module_config "CONFIG_MT76x2U"
+          echo ""
+          
+          echo "--- MT7601U WiFi driver ---"
+          add_module_config "CONFIG_MT7601U"
+          echo ""
+          
+          echo "--- ATH9K WiFi drivers ---"
+          add_module_config "CONFIG_ATH_COMMON"
+          add_module_config "CONFIG_ATH9K"
+          add_module_config "CONFIG_ATH9K_HW"
+          add_module_config "CONFIG_ATH9K_COMMON"
+          add_module_config "CONFIG_ATH9K_HTC"
+          echo ""
+          
+          echo "--- RT2800 WiFi drivers ---"
+          add_module_config "CONFIG_RT2X00"
+          add_module_config "CONFIG_RT2800_LIB"
+          add_module_config "CONFIG_RT2800USB"
+          echo ""
+          
+          echo "--- Realtek WiFi drivers ---"
+          add_module_config "CONFIG_RTL8XXXU"
+          add_module_config "CONFIG_RTL8187"
+          echo ""
+          
+          echo "--- USB HID (BadUSB/DuckHunter) ---"
+          add_module_config "CONFIG_USB_CONFIGFS_F_HID"
+          add_module_config "CONFIG_USB_F_HID"
+          echo ""
+          
+          echo "--- USB Serial adapters ---"
+          add_module_config "CONFIG_USB_SERIAL"
+          add_module_config "CONFIG_USB_SERIAL_CH341"
+          add_module_config "CONFIG_USB_SERIAL_CP210X"
+          add_module_config "CONFIG_USB_SERIAL_FTDI_SIO"
+          add_module_config "CONFIG_USB_SERIAL_PL2303"
+          echo ""
+          
+          echo "--- Networking ---"
+          add_module_config "CONFIG_VETH"
+          add_module_config "CONFIG_BRIDGE"
+          add_module_config "CONFIG_VLAN_8021Q"
+          add_module_config "CONFIG_MACVLAN"
+          echo ""
+          
+          echo "--- Bluetooth USB ---"
+          add_module_config "CONFIG_BT_HCIBTUSB"
+          echo ""
+          
+          echo "--- PPP/VPN extras ---"
+          add_module_config "CONFIG_PPTP"
+          add_module_config "CONFIG_PPPOE"
+          echo ""
+          
+          echo "--- SquashFS ---"
+          add_module_config "CONFIG_SQUASHFS"
+          add_bool_config "CONFIG_SQUASHFS_XZ"
+          add_bool_config "CONFIG_SQUASHFS_LZO"
+          echo ""
+          
+          echo "=============================================="
+          echo "  SUMMARY"
+          echo "=============================================="
+          echo "Final config: $(wc -l < "$WORK_CONFIG") lines"
+          echo ""
+          
+          # Save for later use
+          cp "$WORK_CONFIG" /tmp/final_nethunter_config.txt
+
+      - name: "[STEP 3-ALT] Copy booting config as-is (no NetHunter)"
+        if: ${{ github.event.inputs.NETHUNTER != 'true' }}
+        run: |
+          cp "${GITHUB_WORKSPACE}/config_android12-5.10_kernel-5.10.txt" /tmp/final_nethunter_config.txt
+          echo "Using stock booting config (no NetHunter)"
+
+      # ============================================
+      # STEP 4: Verify the config is safe
+      # ============================================
+      - name: "[STEP 4] Verify config safety"
+        run: |
+          CONFIG="/tmp/final_nethunter_config.txt"
+          echo "=============================================="
+          echo "  CONFIG SAFETY CHECK"
+          echo "=============================================="
+          echo ""
+          echo "--- All =m configs (NetHunter modules) ---"
+          grep "=m" "$CONFIG" | sort
+          echo ""
+          echo "Count: $(grep -c '=m' "$CONFIG") module configs"
+          echo ""
+          echo "--- Checking no =y changes vs original ---"
+          ORIG="${GITHUB_WORKSPACE}/config_android12-5.10_kernel-5.10.txt"
+          
+          # Compare =y lines - should be identical except bool sub-options
+          ORIG_Y=$(grep "=y" "$ORIG" | sort)
+          NEW_Y=$(grep "=y" "$CONFIG" | sort)
+          
+          NEW_BUILTINS=$(comm -13 <(echo "$ORIG_Y") <(echo "$NEW_Y"))
+          if [ -n "$NEW_BUILTINS" ]; then
+            echo "NEW =y configs (bool sub-options only, should be safe):"
+            echo "$NEW_BUILTINS"
+            echo ""
+            echo "Verifying these are ONLY module sub-options..."
+            echo "$NEW_BUILTINS" | while read line; do
+              case "$line" in
+                *MAC80211_HAS_RC*|*MAC80211_RC_MINSTREL*|*MAC80211_RC_DEFAULT_MINSTREL*|*MAC80211_MESH*|*SQUASHFS_XZ*|*SQUASHFS_LZO*)
+                  echo "  OK: $line (bool sub-option of =m parent)"
+                  ;;
+                *)
+                  echo "  WARNING: $line (UNEXPECTED - investigate!)"
+                  ;;
+              esac
+            done
+          else
+            echo "No new =y configs (clean)"
+          fi
+          echo ""
+          echo "--- Checking no =y was changed to =m ---"
+          REMOVED_Y=$(comm -23 <(echo "$ORIG_Y") <(echo "$NEW_Y"))
+          if [ -n "$REMOVED_Y" ]; then
+            echo "ERROR: These =y configs were changed/removed:"
+            echo "$REMOVED_Y"
+            echo "THIS IS DANGEROUS - may cause bootloop!"
+          else
+            echo "OK: No =y configs were modified"
+          fi
+          echo ""
+          echo "=============================================="
+
+      # ============================================
+      # STEP 5: Inject config into build
+      # ============================================
+      - name: "[STEP 5] Disable defconfig generation and inject our config"
+        run: |
+          cd kernel_workspace/kernel-5.10
+          
+          # Disable check_defconfig
+          sed -i 's/check_defconfig//' ./build.config.gki
+          
+          # Find what defconfig the build uses
+          echo "=== Current build.config.oplus6983 ==="
+          cat build.config.oplus6983
+          echo ""
+          
+          # Determine the output directory structure
+          # The build system will run: make ${DEFCONFIG}
+          # which generates .config from defconfig + Kconfig
+          # We need to REPLACE that .config after it's generated
+          # but BEFORE compilation starts
+          #
+          # Strategy: Use POST_DEFCONFIG_CMDS to overwrite .config
+          # with our pre-built config, then skip olddefconfig
+          
+          cat > inject_config.sh << 'INJECT_SCRIPT'
+          #!/bin/bash
+          echo "=============================================="
+          echo "  INJECTING PRE-BUILT CONFIG"
+          echo "  Replacing Kconfig-generated .config"
+          echo "=============================================="
+          
+          # The build system sets OUT_DIR to the output directory
+          TARGET_CONFIG="${OUT_DIR}/.config"
+          SOURCE_CONFIG="/tmp/final_nethunter_config.txt"
+          
+          if [ ! -f "$SOURCE_CONFIG" ]; then
+            echo "ERROR: Source config not found at $SOURCE_CONFIG"
+            exit 1
+          fi
+          
+          if [ ! -f "$TARGET_CONFIG" ]; then
+            echo "ERROR: Target .config not found at $TARGET_CONFIG"
+            echo "OUT_DIR: $OUT_DIR"
+            find "${OUT_DIR}" -name ".config" 2>/dev/null
+            exit 1
+          fi
+          
+          # Backup the Kconfig-generated one for comparison
+          cp "$TARGET_CONFIG" "${OUT_DIR}/.config.kconfig_original"
+          
+          # Replace with our pre-built config
+          cp "$SOURCE_CONFIG" "$TARGET_CONFIG"
+          
+          echo "Config replaced!"
+          echo "Original: $(wc -l < "${OUT_DIR}/.config.kconfig_original") lines"
+          echo "Injected: $(wc -l < "$TARGET_CONFIG") lines"
+          echo ""
+          echo "=== Diff summary ==="
+          diff "${OUT_DIR}/.config.kconfig_original" "$TARGET_CONFIG" | head -50 || true
+          echo "=============================================="
+          INJECT_SCRIPT
+          
+          chmod +x inject_config.sh
+          
+          # Add our injection script to POST_DEFCONFIG_CMDS
+          # This runs AFTER make defconfig but BEFORE make
+          if grep -q "POST_DEFCONFIG_CMDS" build.config.oplus6983; then
+            # Replace existing POST_DEFCONFIG_CMDS
+            sed -i 's|POST_DEFCONFIG_CMDS="\(.*\)"|POST_DEFCONFIG_CMDS="${KERNEL_DIR}/inject_config.sh"|' build.config.oplus6983
+          else
+            echo 'POST_DEFCONFIG_CMDS="${KERNEL_DIR}/inject_config.sh"' >> build.config.oplus6983
+          fi
+          
+          echo ""
+          echo "=== Modified build.config.oplus6983 ==="
+          cat build.config.oplus6983
+
+      # ============================================
+      # STEP 6: Build
+      # ============================================
+      - name: "[STEP 6] Clean and Build"
+        run: |
+          cd kernel_workspace/
+          rm -rf out/
+          ./build/build.sh 2>&1 | tee /tmp/build.log
+
+      # ============================================
+      # STEP 7: Verify
+      # ============================================
+      - name: "[STEP 7] Verify config was actually used"
+        if: always()
+        run: |
+          echo "=============================================="
+          echo "  POST-BUILD CONFIG VERIFICATION"
+          echo "=============================================="
+          
+          FINAL_CONFIG=$(find kernel_workspace/out/ -name ".config" -type f 2>/dev/null | head -1)
+          if [ -n "$FINAL_CONFIG" ]; then
+            echo "Final .config: $FINAL_CONFIG"
+            echo "Lines: $(wc -l < "$FINAL_CONFIG")"
+            echo ""
+            
+            echo "--- NetHunter =m configs in final build ---"
+            grep -E "CONFIG_(MAC80211|MT76|MT7601U|ATH9K|RT2X00|RT2800|RTL8|USB_F_HID|USB_CONFIGFS_F_HID|USB_SERIAL|VETH|BRIDGE|VLAN_8021Q|MACVLAN|BT_HCIBTUSB|PPTP|PPPOE|SQUASHFS)=" "$FINAL_CONFIG" | sort
+            echo ""
+            
+            echo "--- Checking our config was used (not overwritten) ---"
+            ORIGINAL="${GITHUB_WORKSPACE}/config_android12-5.10_kernel-5.10.txt"
+            ORIG_Y_COUNT=$(grep -c "=y" "$ORIGINAL")
+            FINAL_Y_COUNT=$(grep -c "=y" "$FINAL_CONFIG")
+            FINAL_M_COUNT=$(grep -c "=m" "$FINAL_CONFIG")
+            echo "Original =y count: $ORIG_Y_COUNT"
+            echo "Final =y count: $FINAL_Y_COUNT"
+            echo "Final =m count: $FINAL_M_COUNT"
+            
+            if [ "$FINAL_Y_COUNT" -gt "$((ORIG_Y_COUNT + 10))" ]; then
+              echo ""
+              echo "WARNING: =y count jumped significantly!"
+              echo "make olddefconfig may have re-resolved configs!"
+              echo ""
+              echo "New =y configs:"
+              comm -13 <(grep "=y" "$ORIGINAL" | sort) <(grep "=y" "$FINAL_CONFIG" | sort)
+            else
+              echo "OK: =y count is stable"
+            fi
+          else
+            echo "ERROR: No .config found!"
+          fi
+          echo "=============================================="
+
+      - name: "[STEP 7] Verify kernel image"
+        run: |
+          IMAGE="kernel_workspace/out/android12-5.10/kernel-5.10/arch/arm64/boot/Image.gz"
+          if [ ! -f "$IMAGE" ]; then
+            echo "ERROR: Image.gz not found!"
+            exit 1
+          fi
+          SIZE=$(stat -c%s "$IMAGE")
+          echo "Image.gz: $SIZE bytes ($(($SIZE / 1024 / 1024)) MB)"
+          if [ "$SIZE" -lt 1000000 ]; then
+            echo "ERROR: Image.gz too small!"
+            exit 1
+          fi
+          echo "Kernel build OK"
+
+      # ============================================
+      # STEP 8: Package
+      # ============================================
+      - name: "[STEP 8] Create AnyKernel3 Package"
+        run: |
+          git clone https://github.com/darklord4567/Anykernel3_AOSP_NORD3.git --depth=1 Anykernel3_Zabixii
+          cp kernel_workspace/out/android12-5.10/kernel-5.10/arch/arm64/boot/Image.gz Anykernel3_Zabixii/Image.gz
+
+      - name: Set Artifact Suffix
+        id: suffix
+        run: |
+          SUFFIX="_MAGISK"
+          if [ "${{ github.event.inputs.NETHUNTER }}" = "true" ]; then
+            SUFFIX="${SUFFIX}_NH"
+          fi
+          echo "value=${SUFFIX}" >> $GITHUB_OUTPUT
+
+      - name: Upload Kernel
+        uses: actions/upload-artifact@v4
+        with:
+          name: "Zabixii_Kernel${{ steps.suffix.outputs.value }}_by_Zabixii"
+          path: ./Anykernel3_Zabixii/*
+
+      - name: Upload Final Config
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "Final_Config"
+          path: |
+            /tmp/final_nethunter_config.txt
+            /tmp/build.log
+
+      - name: "[STEP 9] Summary"
+        if: always()
+        run: |
+          echo "=============================================="
+          echo "  BUILD COMPLETE"
+          echo "=============================================="
+          echo ""
+          echo "What happened:"
+          echo "  1. Built Level 2 kernel (vendor fixes + suffix)"
+          echo "  2. Booting .config loaded from repo"
+          echo "  3. NetHunter =m configs added via echo/sed"
+          echo "     (no Kconfig re-resolution)"
+          echo "  4. Injected into build via POST_DEFCONFIG_CMDS"
+          echo "  5. Kernel compiled with injected config"
+          echo ""
+          echo "Check STEP 7 output to verify:"
+          echo "  - NetHunter configs show as =m"
+          echo "  - =y count didn't jump"
+          echo "  - No unexpected new builtins"
+          echo ""
+          echo "If STEP 7 shows =y count jumped, the build"
+          echo "system ran olddefconfig and undid our changes."
+          echo "In that case, we need to patch build.sh to"
+          echo "skip olddefconfig entirely."
+          echo "=============================================="
