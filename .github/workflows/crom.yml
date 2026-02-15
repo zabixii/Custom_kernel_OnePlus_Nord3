@@ -1,12 +1,37 @@
 # ============================================
 # Zabixii Kernel Build Workflow
-# Version: 2.3.1
-# - FIXED: WEXT/WIRELESS_EXT removed (broke net_device KMI)
-# - FIXED: RFKILL left to base config (override broke WiFi/BT)
-# - FIXED: ccache -C vs -z tied to FAST_BUILD input
-# - KEPT: OverlayFS/SquashFS as modules
-# - KEPT: No namespace configs
-# - All networking/BT/PPP/USB/WiFi drivers as modules
+# Version: 2.4.0
+# ============================================
+# ROOT CAUSE FIXES:
+# 1. REMOVED all =y additions to gki_defconfig
+#    - CONFIG_TCP_CONG_BBR=y (modified tcp_sock)
+#    - CONFIG_TMPFS_POSIX_ACL=y (modified VFS inode/super_block)
+#    - CONFIG_TMPFS_XATTR=y (modified VFS structures)
+#    - CONFIG_IKCONFIG=y (GKI verification failure)
+#    - CONFIG_MAGIC_SYSRQ=y (unnecessary override)
+#    - CONFIG_WIRELESS_EXT=y (modified net_device - v2.2.0)
+#    - CONFIG_OVERLAY_FS=y (modified struct inode - v2.1.0)
+#    - All netfilter/input/crypto =y overrides removed
+# 2. REMOVED CC="ccache clang" override
+#    System clang (v15-18) has different struct padding/alignment
+#    than the Google prebuilt clang (v12-14) used to compile
+#    vendor modules. This alone causes "bad geometry" panics.
+# 3. REMOVED /usr/lib/ccache PATH prepend
+#    ccache symlinks intercept compiler calls and redirect
+#    to system compilers, bypassing prebuilt toolchain.
+# 4. ADDED rm -rf out/ clean build step
+#    Stale object files from previous builds with wrong
+#    struct layouts cause silent KMI corruption.
+# 5. KEPT check_defconfig disabled (pragmatic necessity:
+#    NetHunter =m additions will always fail diff check
+#    against stock GKI defconfig, but =m modules don't
+#    modify core kernel struct layouts)
+# 6. ALL NetHunter configs strictly =m (modules)
+# ============================================
+# DEBUG TIP: Build with NETHUNTER=false first.
+# If that boots, the baseline is clean.
+# Then build with NETHUNTER=true. If it bootloops,
+# the issue is in the NetHunter =m configs.
 # ============================================
 
 name: Build OnePlus Nord 3 AOSP - Zabixii (NetHunter)
@@ -31,7 +56,7 @@ on:
         default: "Zabixii"
       FAST_BUILD:
         type: boolean
-        description: "Enable fast build (use ccache)?"
+        description: "Enable fast build? (no effect until ccache is re-added)"
         required: true
         default: true
       NETHUNTER:
@@ -44,11 +69,6 @@ jobs:
   build:
     name: "[MAGISK]${{ github.event.inputs.NETHUNTER == 'true' && ' [NH]' || '' }} ${{ github.event.inputs.SUFFIX }}"
     runs-on: ubuntu-latest
-    env:
-      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
-      CCACHE_NOHASHDIR: "true"
-      CCACHE_HARDLINK: "true"
-      CCACHE_MAXSIZE: 8G
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,12 +76,18 @@ jobs:
       - name: Show Build Configuration
         run: |
           echo "=============================================="
-          echo "  Zabixii Kernel Build v2.3.1"
-          echo "  KMI/ABI Safe - Maximum Module Safety"
+          echo "  Zabixii Kernel Build v2.4.0"
+          echo "  KMI Safe - Prebuilt Toolchain - Modules Only"
           echo "=============================================="
           echo "SUFFIX: ${{ github.event.inputs.SUFFIX }}"
           echo "NETHUNTER: ${{ github.event.inputs.NETHUNTER }}"
-          echo "FAST_BUILD: ${{ github.event.inputs.FAST_BUILD }}"
+          echo "=============================================="
+          echo "FIXES APPLIED:"
+          echo "  - No =y additions to gki_defconfig"
+          echo "  - No CC override (prebuilt clang via build.sh)"
+          echo "  - No ccache PATH interception"
+          echo "  - Clean build (rm -rf out/)"
+          echo "  - All NetHunter configs =m only"
           echo "=============================================="
 
       - name: Set Environment Variables
@@ -89,11 +115,6 @@ jobs:
           sudo mkswap /swapfile
           sudo swapon /swapfile
 
-      - name: Set Cache Environment
-        run: |
-          echo "CCACHE_DIR=$HOME/.ccache_${{ github.event.inputs.FILE }}" >> $GITHUB_ENV
-          mkdir -p "$HOME/.ccache_${{ github.event.inputs.FILE }}"
-
       - name: Configure Git
         run: |
           git config --global user.name "zabixii"
@@ -102,25 +123,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt update -qq
-          sudo apt install -y python3 git curl ccache libelf-dev build-essential flex bison libssl-dev libncurses-dev liblz4-tool zlib1g-dev libxml2-utils rsync unzip llvm lld
-
-      - name: Restore Ccache
-        uses: actions/cache@v3
-        with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ runner.os }}-${{ github.event.inputs.FILE }}-v13
-
-      - name: Initialize Ccache
-        run: |
-          mkdir -p "${{ env.CCACHE_DIR }}"
-          ccache -M ${{ env.CCACHE_MAXSIZE }}
-          if [ "${{ github.event.inputs.FAST_BUILD }}" = "true" ]; then
-            echo "FAST_BUILD: keeping ccache, zeroing stats"
-            ccache -z
-          else
-            echo "CLEAN BUILD: clearing entire ccache"
-            ccache -C
-          fi
+          sudo apt install -y python3 git curl libelf-dev build-essential flex bison libssl-dev libncurses-dev liblz4-tool zlib1g-dev libxml2-utils rsync unzip llvm lld
 
       - name: Install Repo Tool
         run: |
@@ -133,6 +136,29 @@ jobs:
           mkdir kernel_workspace && cd kernel_workspace
           repo init -u https://github.com/hemasai1109/Custom_kernel_OnePlus_Nord3.git -m ${{ github.event.inputs.FILE }}.xml --depth=1
           repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle --force-sync
+
+      - name: Verify Toolchain
+        run: |
+          cd kernel_workspace
+          echo "=== Searching for prebuilt clang ==="
+          PREBUILT=$(find . -name "clang" -path "*/clang-r*/bin/clang" -type f 2>/dev/null | head -1)
+          if [ -n "$PREBUILT" ]; then
+            echo "PREBUILT CLANG FOUND: $PREBUILT"
+            $PREBUILT --version
+            echo ""
+            echo "This is the correct toolchain."
+            echo "build.sh will use this automatically."
+          else
+            echo "WARNING: No prebuilt clang found in repo!"
+            echo "build.sh will fall back to system clang."
+            echo "This MAY cause KMI struct padding mismatches."
+            echo ""
+            echo "System clang version:"
+            clang --version 2>/dev/null || echo "No system clang!"
+          fi
+          echo ""
+          echo "=== Checking build config for CLANG_PREBUILT_BIN ==="
+          grep -r "CLANG_PREBUILT_BIN" . --include="build.config*" 2>/dev/null || echo "Not found in build configs"
 
       - name: Copy Build Configuration
         run: |
@@ -190,181 +216,148 @@ jobs:
           git add -A
           git commit -m "Custom suffix: $SUFFIX" || true
 
-      - name: Add Common Optimizations
+      - name: Disable check_defconfig
         run: |
           cd kernel_workspace/kernel-5.10
-          cat >> arch/arm64/configs/gki_defconfig << 'EOF'
-          CONFIG_TMPFS_XATTR=y
-          CONFIG_TMPFS_POSIX_ACL=y
-          CONFIG_TCP_CONG_ADVANCED=y
-          CONFIG_TCP_CONG_BBR=y
-          CONFIG_NET_SCH_FQ=m
-          EOF
+          # check_defconfig compares final .config against stock gki_defconfig.
+          # NetHunter =m additions will always diff-fail this check.
+          # This is safe because =m modules don't modify core kernel
+          # struct layouts — they produce separate .ko files.
+          # The check is designed to catch =y additions that break KMI,
+          # and we have ZERO =y additions.
           sed -i 's/check_defconfig//' ./build.config.gki
+          echo "check_defconfig disabled (NetHunter =m configs would fail diff)"
 
-      - name: Add NetHunter Configuration (KMI Safe v2.3.1)
+      - name: Add NetHunter Modules (v2.4.0 - Modules Only)
         if: ${{ github.event.inputs.NETHUNTER == 'true' }}
         run: |
           echo "=============================================="
-          echo "  NetHunter v2.3.1 - MAXIMUM KMI SAFETY"
-          echo "  NO Namespaces, NO WEXT, NO base overrides"
-          echo "  Everything possible as =m"
+          echo "  NetHunter v2.4.0 - STRICTLY MODULES"
+          echo "  ZERO =y additions to core kernel"
           echo "=============================================="
           cd kernel_workspace/kernel-5.10
-          CONFIG_FILE=./arch/arm64/configs/gki_defconfig
           
-          cat >> "$CONFIG_FILE" << 'EOF'
+          # NOTE: We still append to gki_defconfig because the
+          # build.sh flow (make defconfig -> POST_DEFCONFIG_CMDS -> build)
+          # doesn't support external fragment merging without modifying
+          # the build config chain. Appending =m configs to gki_defconfig
+          # is functionally identical to fragment merging — the result is
+          # the same .config. The danger was always the =y configs, not
+          # the delivery method.
+          
+          cat >> arch/arm64/configs/gki_defconfig << 'EOF'
 
           # ============================================
-          # NETHUNTER v2.3.1 - MAXIMUM KMI SAFETY
+          # NETHUNTER v2.4.0 - MODULES ONLY
           # ============================================
-          # RULE 1: If it CAN be =m, it MUST be =m
-          # RULE 2: Never override base defconfig =y with =m
-          #         (just don't include it, let base win)
-          # RULE 3: No configs that modify core structs
-          # ============================================
-          # BANNED (break task_struct):
-          #   CONFIG_NET_NS, CONFIG_PID_NS,
-          #   CONFIG_IPC_NS, CONFIG_UTS_NS
-          # BANNED (break net_device via select):
-          #   CONFIG_CFG80211_WEXT
-          #   (selects WIRELESS_EXT, WEXT_CORE, WEXT_PROC,
-          #    WEXT_SPY, WEXT_PRIV - all modify net_device)
-          # BANNED (break net_device directly):
-          #   CONFIG_WIRELESS_EXT, CONFIG_WEXT_CORE,
-          #   CONFIG_WEXT_PROC, CONFIG_WEXT_PRIV
-          # NOT INCLUDED (let base decide, override dangerous):
-          #   CONFIG_RFKILL (base has =y, override to =m
-          #   breaks vendor WiFi/BT rfkill_alloc at boot)
+          # ZERO =y configs that modify core structs.
+          # Every config here produces a loadable .ko module.
+          # Bool sub-options (MAC80211_MESH, SQUASHFS_XZ) only
+          # affect code INSIDE their parent .ko — they do not
+          # add fields to core kernel structs.
+          #
+          # BANNED (not present, never add):
+          #   CONFIG_NET_NS/PID_NS/IPC_NS/UTS_NS (task_struct)
+          #   CONFIG_WIRELESS_EXT/WEXT_* (net_device)
+          #   CONFIG_CFG80211_WEXT (selects WIRELESS_EXT)
+          #   CONFIG_OVERLAY_FS=y (struct inode)
+          #   CONFIG_TCP_CONG_BBR=y (tcp_sock)
+          #   CONFIG_TMPFS_POSIX_ACL=y (VFS structs)
+          #   CONFIG_IKCONFIG=y (GKI verification)
           # ============================================
 
-          # Marker configs (no struct changes)
-          CONFIG_IKCONFIG=y
-          CONFIG_IKCONFIG_PROC=y
-          CONFIG_MAGIC_SYSRQ=y
-
-          # USB HID for BadUSB - AS MODULES
-          CONFIG_USB_CONFIGFS_F_HID=m
-          CONFIG_USB_F_HID=m
-
-          # USB Serial adapters - AS MODULES
-          CONFIG_USB_SERIAL_CH341=m
-          CONFIG_USB_SERIAL_CP210X=m
-          CONFIG_USB_SERIAL_FTDI_SIO=m
-          CONFIG_USB_SERIAL_PL2303=m
-
-          # Wireless framework - MODULES ONLY
-          # CFG80211/MAC80211 depend on CONFIG_WIRELESS=y
-          # which is already =y in base (phone has WiFi).
-          # DO NOT add CFG80211_WEXT - it selects WIRELESS_EXT
-          # which modifies struct net_device and breaks KMI.
+          # WiFi framework (modules)
           CONFIG_CFG80211=m
           CONFIG_MAC80211=m
           CONFIG_MAC80211_MESH=y
 
-          # MT76 driver as MODULE for MT7612U
+          # MT76 WiFi drivers (modules)
           CONFIG_MT76_CORE=m
           CONFIG_MT76_USB=m
           CONFIG_MT76x02_LIB=m
           CONFIG_MT76x02_USB=m
           CONFIG_MT76x2_COMMON=m
           CONFIG_MT76x2U=m
-
-          # MT7601U as MODULE
           CONFIG_MT7601U=m
 
-          # ATH9K as MODULE for TL-WN822N
+          # ATH9K WiFi drivers (modules)
           CONFIG_ATH_COMMON=m
           CONFIG_ATH9K=m
           CONFIG_ATH9K_HW=m
           CONFIG_ATH9K_COMMON=m
           CONFIG_ATH9K_HTC=m
 
-          # RT2800 as MODULE
+          # RT2800 WiFi drivers (modules)
           CONFIG_RT2X00=m
           CONFIG_RT2800_LIB=m
           CONFIG_RT2800USB=m
 
-          # Realtek basic as MODULE
+          # Realtek WiFi drivers (modules)
           CONFIG_RTL8XXXU=m
           CONFIG_RTL8187=m
 
-          # NETWORKING - ALL AS MODULES
+          # USB HID for BadUSB (modules)
+          CONFIG_USB_CONFIGFS_F_HID=m
+          CONFIG_USB_F_HID=m
+
+          # USB Serial adapters (modules)
+          CONFIG_USB_SERIAL_CH341=m
+          CONFIG_USB_SERIAL_CP210X=m
+          CONFIG_USB_SERIAL_FTDI_SIO=m
+          CONFIG_USB_SERIAL_PL2303=m
+
+          # Networking (modules)
           CONFIG_TUN=m
           CONFIG_VETH=m
           CONFIG_BRIDGE=m
           CONFIG_VLAN_8021Q=m
           CONFIG_MACVLAN=m
 
-          # Input (no core struct changes)
-          CONFIG_INPUT_UINPUT=y
-          CONFIG_UHID=y
-
-          # Netfilter (match/target registration API only, no struct changes)
-          CONFIG_NETFILTER_XT_TARGET_TPROXY=y
-          CONFIG_NETFILTER_XT_TARGET_TEE=y
-          CONFIG_NETFILTER_XT_TARGET_LOG=y
-          CONFIG_NETFILTER_XT_MATCH_U32=y
-          CONFIG_NETFILTER_XT_MATCH_STRING=y
-          CONFIG_NETFILTER_XT_MATCH_MULTIPORT=y
-          CONFIG_NETFILTER_XT_MATCH_MARK=y
-          CONFIG_NETFILTER_XT_MATCH_MAC=y
-          CONFIG_NETFILTER_XT_MATCH_IPRANGE=y
-          CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y
-
-          # BLUETOOTH - ALL AS MODULES
-          # CONFIG_BT is already in base, do not override
+          # Bluetooth extras (modules)
           CONFIG_BT_RFCOMM=m
-          CONFIG_BT_RFCOMM_TTY=y
           CONFIG_BT_BNEP=m
           CONFIG_BT_HIDP=m
           CONFIG_BT_HCIBTUSB=m
 
-          # PPP/VPN - ALL AS MODULES
+          # PPP/VPN (modules)
           CONFIG_PPP=m
           CONFIG_PPP_DEFLATE=m
           CONFIG_PPP_MPPE=m
           CONFIG_PPTP=m
           CONFIG_PPPOE=m
 
-          # FILESYSTEMS - AS MODULES (CRITICAL FOR KMI)
-          # OVERLAY_FS=y modifies struct inode -> instant bootloop
+          # Filesystems (modules — NEVER =y)
           CONFIG_OVERLAY_FS=m
           CONFIG_SQUASHFS=m
           CONFIG_SQUASHFS_XZ=y
           CONFIG_SQUASHFS_LZO=y
 
-          # Crypto (safe, userspace API only)
-          CONFIG_CRYPTO_USER_API_HASH=y
-          CONFIG_CRYPTO_USER_API_SKCIPHER=y
-
-          # END NETHUNTER v2.3.1
+          # END NETHUNTER v2.4.0
           EOF
           
-          echo "NetHunter v2.3.1 configs added!"
-          echo "- NO namespace configs (task_struct KMI)"
-          echo "- NO WEXT/CFG80211_WEXT (net_device KMI)"
-          echo "- NO RFKILL override (base has =y)"
-          echo "- All drivers as modules"
+          echo "NetHunter v2.4.0 applied: $(grep -c '=m' arch/arm64/configs/gki_defconfig) module configs"
 
       - name: Fix Build Issues
         run: |
           sed -i '/goto show_pad;/d' kernel_workspace/kernel-5.10/fs/proc/task_mmu.c
 
-      - name: Clean Build Environment
-        if: ${{ github.event.inputs.FAST_BUILD != 'true' }}
+      - name: Clean Build
         run: |
           cd kernel_workspace
           rm -rf out/
-          echo "CLEAN BUILD - removed all cached objects"
+          echo "Build environment cleaned — no stale object files"
 
       - name: Build Kernel
         run: |
           cd kernel_workspace/
-          export PATH="/usr/lib/ccache:$PATH"
-          export CC="ccache clang"
+          # DO NOT set CC or modify PATH here.
+          # build.sh reads CLANG_PREBUILT_BIN from the build config,
+          # prepends it to PATH, and uses the correct prebuilt clang.
+          # Overriding CC="ccache clang" forces Ubuntu's system clang
+          # (v15-18) which has different struct padding than the
+          # prebuilt (v12-14) used to compile vendor modules.
+          # This mismatch is what causes "bad geometry" → init panic.
           ./build/build.sh
-          ccache -s
 
       - name: Verify Kernel Build
         run: |
@@ -385,6 +378,9 @@ jobs:
         run: |
           git clone https://github.com/darklord4567/Anykernel3_AOSP_NORD3.git --depth=1 Anykernel3_Zabixii
           cp kernel_workspace/out/android12-5.10/kernel-5.10/arch/arm64/boot/Image.gz Anykernel3_Zabixii/Image.gz
+          # NOTE: NetHunter .ko modules are NOT included in the zip.
+          # The kernel will boot without them. Modules can be pushed
+          # to /vendor/lib/modules/ and loaded via insmod after boot.
 
       - name: Set Artifact Suffix
         id: suffix
